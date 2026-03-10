@@ -1,7 +1,9 @@
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
+import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
+import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
 export class Repository<T> {
@@ -27,6 +29,54 @@ export class Repository<T> {
         );
 
         return rows.length > 0 ? this.hydrate(rows[0]) : null;
+    }
+
+    public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
+        let sql = `SELECT * FROM ${this.metadata.tableName}`;
+        const params: unknown[] = [];
+        const conditions: string[] = [];
+
+        if (options.where) {
+            for (const [key, value] of Object.entries(options.where)) {
+                const column = this.metadata.columns.find(c => c.propertyKey === key);
+                if (column) {
+                    if (isOperator(value)) {
+                        const { sql, params: opParams } = value.buildClause(column.databaseName, params.length + 1);
+                        conditions.push(sql);
+                        params.push(...opParams);
+                    } else {
+                        params.push(value);
+                        conditions.push(`${column.databaseName} = $${params.length}`);
+                    }
+                }
+            }
+            if (conditions.length > 0) {
+                sql += ` WHERE ${conditions.join(' AND ')}`;
+            }
+        }
+
+        if (options.orderBy) {
+            const orderClauses = Object.entries(options.orderBy)
+                .map(([key, direction]) => {
+                    const column = this.metadata.columns.find(c => c.propertyKey === key);
+                    return column ? `${column.databaseName} ${direction}` : null;
+                })
+                .filter((clause): clause is string => clause !== null);
+
+            if (orderClauses.length > 0) {
+                sql += ` ORDER BY ${orderClauses.join(', ')}`;
+            }
+        }
+
+        if (options.limit !== undefined) {
+            sql += ` LIMIT ${options.limit}`;
+        }
+        if (options.offset !== undefined) {
+            sql += ` OFFSET ${options.offset}`;
+        }
+
+        const rows = await this.runner.query<Record<string, unknown>>(sql, params);
+        return rows.map(row => this.hydrate(row));
     }
 
     public async save(entity: T): Promise<T> {

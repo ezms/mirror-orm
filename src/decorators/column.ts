@@ -26,11 +26,12 @@ const applyColumn = (nameOrOptions: string | IColumnOptions | undefined, context
         propertyKey: String(context.name),
         databaseName: columnName,
         options,
+        primary: false,
     };
 
     if (!context.metadata) return;
-    (context.metadata[COLUMNS_KEY] as IColumnMetadata[] | undefined) ??= [];
-    (context.metadata[COLUMNS_KEY] as IColumnMetadata[]).push(column);
+    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
+    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };
 
 export const Column = ((

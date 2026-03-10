@@ -1,4 +1,3 @@
-import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 
 class MetadataRegistry {
@@ -15,8 +14,6 @@ class MetadataRegistry {
     public getAll(): Array<IEntityMetadata> {
         return Array.from(this.entities.values());
     }
-
-
 }
 
 export const registry = new MetadataRegistry();

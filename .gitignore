@@ -26,3 +26,6 @@ logs
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Tests
+coverage/

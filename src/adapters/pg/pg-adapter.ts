@@ -1,5 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { IConnectionOptions } from '../../connection/connection-options';
+import { QueryError } from '../../errors';
 import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
 
@@ -43,8 +44,12 @@ export class PgAdapter implements IDriverAdapter {
 
     public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
         if (!this.pool) throw new Error('Not connected');
-        const result = await this.pool.query(sql, params);
-        return result.rows as Array<T>;
+        try {
+            const result = await this.pool.query(sql, params);
+            return result.rows as Array<T>;
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     public async acquireTransactionRunner(): Promise<ITransactionRunner> {

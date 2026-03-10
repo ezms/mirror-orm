@@ -1,3 +1,4 @@
+import { GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
@@ -14,21 +15,24 @@ export class Repository<T> {
     ) {}
 
     public async findAll(): Promise<Array<T>> {
-        const rows = await this.runner.query<Record<string, unknown>>(
-            `SELECT * FROM ${this.metadata.tableName}`,
-        );
-        return rows.map(row => this.hydrate(row));
+        const sql = `SELECT * FROM ${this.metadata.tableName}`;
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql);
+            return rows.map(row => this.hydrate(row));
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     public async findById(id: number | string): Promise<T | null> {
         const pk = this.primaryColumn();
-
-        const rows = await this.runner.query<Record<string, unknown>>(
-            `SELECT * FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`,
-            [id],
-        );
-
-        return rows.length > 0 ? this.hydrate(rows[0]) : null;
+        const sql = `SELECT * FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`;
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql, [id]);
+            return rows.length > 0 ? this.hydrate(rows[0]) : null;
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
@@ -67,8 +71,12 @@ export class Repository<T> {
             sql += ` OFFSET ${options.offset}`;
         }
 
-        const rows = await this.runner.query<Record<string, unknown>>(sql, params);
-        return rows.map(row => this.hydrate(row));
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql, params);
+            return rows.map(row => this.hydrate(row));
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
@@ -87,8 +95,12 @@ export class Repository<T> {
             }
         }
 
-        const rows = await this.runner.query<{ count: string }>(sql, params);
-        return parseInt(rows[0].count, 10);
+        try {
+            const rows = await this.runner.query<{ count: string }>(sql, params);
+            return parseInt(rows[0].count, 10);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     public async save(entity: T): Promise<T> {
@@ -101,18 +113,20 @@ export class Repository<T> {
             : this.update(record, pk, pkValue);
     }
 
-    async remove(entity: T): Promise<void> {
+    public async remove(entity: T): Promise<void> {
         const pk = this.primaryColumn();
         const pkValue = (entity as Record<string, unknown>)[pk.propertyKey];
 
         if (typeof pkValue === 'undefined' || pkValue === null) {
-            throw new Error(`Cannot remove "${this.metadata.className}" without a primary key value`);
+            throw new MissingPrimaryKeyError(this.metadata.className, 'remove');
         }
 
-        await this.runner.query(
-            `DELETE FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`,
-            [pkValue],
-        );
+        const sql = `DELETE FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`;
+        try {
+            await this.runner.query(sql, [pkValue]);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     private async insert(record: Record<string, unknown>, pk: IColumnMetadata): Promise<T> {
@@ -126,31 +140,33 @@ export class Repository<T> {
         const names = columns.map(c => c.databaseName);
         const values = columns.map(c => record[c.propertyKey]);
         const placeholders = values.map((_, i) => `$${i + 1}`);
+        const sql = `INSERT INTO ${this.metadata.tableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
 
-        const rows = await this.runner.query<Record<string, unknown>>(
-            `INSERT INTO ${this.metadata.tableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
-            values,
-        );
-
-        return this.hydrate(rows[0]);
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql, values);
+            return this.hydrate(rows[0]);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     private async update(record: Record<string, unknown>, pk: IColumnMetadata, pkValue: unknown): Promise<T> {
         const columns = this.metadata.columns.filter(c => !c.primary);
         const setClauses = columns.map((c, i) => `${c.databaseName} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
+        const sql = `UPDATE ${this.metadata.tableName} SET ${setClauses.join(', ')} WHERE ${pk.databaseName} = $${columns.length + 1} RETURNING *`;
 
-        const rows = await this.runner.query<Record<string, unknown>>(
-            `UPDATE ${this.metadata.tableName} SET ${setClauses.join(', ')} WHERE ${pk.databaseName} = $${columns.length + 1} RETURNING *`,
-            [...values, pkValue],
-        );
-
-        return this.hydrate(rows[0]);
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql, [...values, pkValue]);
+            return this.hydrate(rows[0]);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
     }
 
     private primaryColumn(): IColumnMetadata {
         const pk = this.metadata.columns.find(c => c.primary);
-        if (!pk) throw new Error(`No primary column defined on "${this.metadata.className}". Did you add @PrimaryColumn?`);
+        if (!pk) throw new NoPrimaryColumnError(this.metadata.className);
         return pk;
     }
 
@@ -159,11 +175,11 @@ export class Repository<T> {
             case 'uuid_v4': return generateUuidV4();
             case 'uuid_v7': return generateUuidV7();
             case 'custom': {
-                if (!generation.generate) throw new Error('custom strategy requires a generate() function');
+                if (!generation.generate) throw new GenerationStrategyError('custom strategy requires a generate() function');
                 return generation.generate();
             }
             case 'identity':
-                throw new Error('identity strategy is managed by the database and cannot generate a value');
+                throw new GenerationStrategyError('identity strategy is managed by the database and cannot generate a value');
         }
     }
 

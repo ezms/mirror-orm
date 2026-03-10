@@ -1,4 +1,5 @@
 import { IDriverAdapter } from '../adapters/adapter';
+import type { ILogger } from '../logger/logger.interface';
 
 export interface IConnectionOptions {
     adapter: IDriverAdapter;
@@ -8,6 +9,7 @@ export interface IConnectionOptions {
     database?: string;
     user?: string;
     password?: string;
+    logger?: ILogger;
 }
 
 export type IConnectionConfig = Omit<IConnectionOptions, 'adapter'>;

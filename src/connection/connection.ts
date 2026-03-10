@@ -1,4 +1,6 @@
 import { PgAdapter } from '../adapters/pg/pg-adapter';
+import { IQueryRunner } from '../interfaces/query-runner';
+import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
 import { Repository } from '../repository/repository';
 import { IConnectionConfig, IConnectionOptions } from './connection-options';
@@ -23,13 +25,16 @@ export class Connection {
     public getRepository<T>(target: new () => T): Repository<T> {
         const metadata = registry.getEntity(target.name);
         if (!metadata) throw new Error(`Entity "${target.name}" not registered. Did you add @Entity?`);
-        return new Repository(target, this, metadata);
+        return new Repository(target, this.withLogger(this), metadata);
     }
 
     public async transaction<R>(callback: (trx: TransactionContext) => Promise<R>): Promise<R> {
         const runner = await this.options.adapter.acquireTransactionRunner();
+        const loggingRunner = this.options.logger
+            ? new LoggingTransactionRunner(runner, this.options.logger)
+            : runner;
         try {
-            const result = await callback(new TransactionContext(runner));
+            const result = await callback(new TransactionContext(loggingRunner));
             await runner.commit();
             return result;
         } catch (error) {
@@ -42,5 +47,11 @@ export class Connection {
 
     public async disconnect(): Promise<void> {
         await this.options.adapter.disconnect();
+    }
+
+    private withLogger(runner: IQueryRunner): IQueryRunner {
+        return this.options.logger
+            ? new LoggingQueryRunner(runner, this.options.logger)
+            : runner;
     }
 }

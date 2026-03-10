@@ -2,6 +2,7 @@ import { PgAdapter } from '../adapters/pg/pg-adapter';
 import { registry } from '../metadata/registry';
 import { Repository } from '../repository/repository';
 import { IConnectionConfig, IConnectionOptions } from './connection-options';
+import { TransactionContext } from './transaction-context';
 
 export class Connection {
     private constructor(private readonly options: IConnectionOptions) {}
@@ -23,6 +24,20 @@ export class Connection {
         const metadata = registry.getEntity(target.name);
         if (!metadata) throw new Error(`Entity "${target.name}" not registered. Did you add @Entity?`);
         return new Repository(target, this, metadata);
+    }
+
+    public async transaction<R>(callback: (trx: TransactionContext) => Promise<R>): Promise<R> {
+        const runner = await this.options.adapter.acquireTransactionRunner();
+        try {
+            const result = await callback(new TransactionContext(runner));
+            await runner.commit();
+            return result;
+        } catch (error) {
+            await runner.rollback();
+            throw error;
+        } finally {
+            runner.release();
+        }
     }
 
     public async disconnect(): Promise<void> {

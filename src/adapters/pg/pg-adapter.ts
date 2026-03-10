@@ -1,6 +1,28 @@
-import { Pool } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import { IConnectionOptions } from '../../connection/connection-options';
+import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
+
+class PgTransactionRunner implements ITransactionRunner {
+    constructor(private readonly client: PoolClient) {}
+
+    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
+        const result = await this.client.query(sql, params);
+        return result.rows as Array<T>;
+    }
+
+    public async commit(): Promise<void> {
+        await this.client.query('COMMIT');
+    }
+
+    public async rollback(): Promise<void> {
+        await this.client.query('ROLLBACK');
+    }
+
+    public release(): void {
+        this.client.release();
+    }
+}
 
 export class PgAdapter implements IDriverAdapter {
     private pool: Pool | null = null;
@@ -23,6 +45,13 @@ export class PgAdapter implements IDriverAdapter {
         if (!this.pool) throw new Error('Not connected');
         const result = await this.pool.query(sql, params);
         return result.rows as Array<T>;
+    }
+
+    public async acquireTransactionRunner(): Promise<ITransactionRunner> {
+        if (!this.pool) throw new Error('Not connected');
+        const client = await this.pool.connect();
+        await client.query('BEGIN');
+        return new PgTransactionRunner(client);
     }
 
     public async disconnect(): Promise<void> {

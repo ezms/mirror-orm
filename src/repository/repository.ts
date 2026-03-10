@@ -34,24 +34,16 @@ export class Repository<T> {
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         let sql = `SELECT * FROM ${this.metadata.tableName}`;
         const params: unknown[] = [];
-        const conditions: string[] = [];
 
         if (options.where) {
-            for (const [key, value] of Object.entries(options.where)) {
-                const column = this.metadata.columns.find(c => c.propertyKey === key);
-                if (column) {
-                    if (isOperator(value)) {
-                        const { sql, params: opParams } = value.buildClause(column.databaseName, params.length + 1);
-                        conditions.push(sql);
-                        params.push(...opParams);
-                    } else {
-                        params.push(value);
-                        conditions.push(`${column.databaseName} = $${params.length}`);
-                    }
-                }
-            }
-            if (conditions.length > 0) {
-                sql += ` WHERE ${conditions.join(' AND ')}`;
+            const groups = Array.isArray(options.where) ? options.where : [options.where];
+            const whereClauses = groups
+                .map(condition => this.buildWhereGroup(condition as Record<string, unknown>, params))
+                .filter(group => group.length > 0)
+                .map(group => group.length > 1 ? `(${group.join(' AND ')})` : group[0]);
+
+            if (whereClauses.length > 0) {
+                sql += ` WHERE ${whereClauses.join(' OR ')}`;
             }
         }
 
@@ -77,6 +69,26 @@ export class Repository<T> {
 
         const rows = await this.runner.query<Record<string, unknown>>(sql, params);
         return rows.map(row => this.hydrate(row));
+    }
+
+    public async count(where?: IFindOptions<T>['where']): Promise<number> {
+        let sql = `SELECT COUNT(*) FROM ${this.metadata.tableName}`;
+        const params: unknown[] = [];
+
+        if (where) {
+            const groups = Array.isArray(where) ? where : [where];
+            const whereClauses = groups
+                .map(condition => this.buildWhereGroup(condition as Record<string, unknown>, params))
+                .filter(group => group.length > 0)
+                .map(group => group.length > 1 ? `(${group.join(' AND ')})` : group[0]);
+
+            if (whereClauses.length > 0) {
+                sql += ` WHERE ${whereClauses.join(' OR ')}`;
+            }
+        }
+
+        const rows = await this.runner.query<{ count: string }>(sql, params);
+        return parseInt(rows[0].count, 10);
     }
 
     public async save(entity: T): Promise<T> {
@@ -153,6 +165,26 @@ export class Repository<T> {
             case 'identity':
                 throw new Error('identity strategy is managed by the database and cannot generate a value');
         }
+    }
+
+    private buildWhereGroup(condition: Record<string, unknown>, params: unknown[]): string[] {
+        const clauses: string[] = [];
+
+        for (const [key, value] of Object.entries(condition)) {
+            const column = this.metadata.columns.find(c => c.propertyKey === key);
+            if (!column) continue;
+
+            if (isOperator(value)) {
+                const { sql, params: opParams } = value.buildClause(column.databaseName, params.length + 1);
+                clauses.push(sql);
+                params.push(...opParams);
+            } else {
+                params.push(value);
+                clauses.push(`${column.databaseName} = $${params.length}`);
+            }
+        }
+
+        return clauses;
     }
 
     private hydrate(row: Record<string, unknown>): T {

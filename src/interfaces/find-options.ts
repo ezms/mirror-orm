@@ -1,5 +1,7 @@
+export type WhereCondition<T> = Partial<Record<keyof T, unknown>>;
+
 export interface IFindOptions<T> {
-    where?: Partial<Record<keyof T, unknown>>;
+    where?: WhereCondition<T> | Array<WhereCondition<T>>;
     orderBy?: Partial<Record<keyof T, 'ASC' | 'DESC'>>;
     limit?: number;
     offset?: number;

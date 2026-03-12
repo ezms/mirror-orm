@@ -14,8 +14,12 @@ export class Repository<T> {
         private readonly metadata: IEntityMetadata,
     ) {}
 
+    private quoteIdentifier(identifier: string): string {
+        return `"${identifier}"`;
+    }
+
     public async findAll(): Promise<Array<T>> {
-        const sql = `SELECT * FROM ${this.metadata.tableName}`;
+        const sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql);
             return rows.map(row => this.hydrate(row));
@@ -26,7 +30,7 @@ export class Repository<T> {
 
     public async findById(id: number | string): Promise<T | null> {
         const pk = this.primaryColumn();
-        const sql = `SELECT * FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`;
+        const sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)} WHERE ${this.quoteIdentifier(pk.databaseName)} = $1`;
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, [id]);
             return rows.length > 0 ? this.hydrate(rows[0]) : null;
@@ -36,7 +40,7 @@ export class Repository<T> {
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        let sql = `SELECT * FROM ${this.metadata.tableName}`;
+        let sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
         const params: Array<unknown> = [];
 
         if (options.where) {
@@ -55,7 +59,7 @@ export class Repository<T> {
             const orderClauses = Object.entries(options.orderBy)
                 .map(([key, direction]) => {
                     const column = this.metadata.columns.find(c => c.propertyKey === key);
-                    return column ? `${column.databaseName} ${direction}` : null;
+                    return column ? `${this.quoteIdentifier(column.databaseName)} ${direction}` : null;
                 })
                 .filter((clause): clause is string => clause !== null);
 
@@ -80,7 +84,7 @@ export class Repository<T> {
     }
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
-        let sql = `SELECT COUNT(*) FROM ${this.metadata.tableName}`;
+        let sql = `SELECT COUNT(*) FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
         const params: Array<unknown> = [];
 
         if (where) {
@@ -121,7 +125,7 @@ export class Repository<T> {
             throw new MissingPrimaryKeyError(this.metadata.className, 'remove');
         }
 
-        const sql = `DELETE FROM ${this.metadata.tableName} WHERE ${pk.databaseName} = $1`;
+        const sql = `DELETE FROM ${this.quoteIdentifier(this.metadata.tableName)} WHERE ${this.quoteIdentifier(pk.databaseName)} = $1`;
         try {
             await this.runner.query(sql, [pkValue]);
         } catch (error) {
@@ -137,10 +141,10 @@ export class Repository<T> {
         }
 
         const columns = this.metadata.columns.filter(c => !c.primary || !isIdentity);
-        const names = columns.map(c => c.databaseName);
+        const names = columns.map(c => this.quoteIdentifier(c.databaseName));
         const values = columns.map(c => record[c.propertyKey]);
         const placeholders = values.map((_, i) => `$${i + 1}`);
-        const sql = `INSERT INTO ${this.metadata.tableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+        const sql = `INSERT INTO ${this.quoteIdentifier(this.metadata.tableName)} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, values);
@@ -152,9 +156,9 @@ export class Repository<T> {
 
     private async update(record: Record<string, unknown>, pk: IColumnMetadata, pkValue: unknown): Promise<T> {
         const columns = this.metadata.columns.filter(c => !c.primary);
-        const setClauses = columns.map((c, i) => `${c.databaseName} = $${i + 1}`);
+        const setClauses = columns.map((c, i) => `${this.quoteIdentifier(c.databaseName)} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
-        const sql = `UPDATE ${this.metadata.tableName} SET ${setClauses.join(', ')} WHERE ${pk.databaseName} = $${columns.length + 1} RETURNING *`;
+        const sql = `UPDATE ${this.quoteIdentifier(this.metadata.tableName)} SET ${setClauses.join(', ')} WHERE ${this.quoteIdentifier(pk.databaseName)} = $${columns.length + 1} RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, [...values, pkValue]);
@@ -191,12 +195,12 @@ export class Repository<T> {
             if (!column) continue;
 
             if (isOperator(value)) {
-                const { sql, params: opParams } = value.buildClause(column.databaseName, params.length + 1);
+                const { sql, params: opParams } = value.buildClause(this.quoteIdentifier(column.databaseName), params.length + 1);
                 clauses.push(sql);
                 params.push(...opParams);
             } else {
                 params.push(value);
-                clauses.push(`${column.databaseName} = $${params.length}`);
+                clauses.push(`${this.quoteIdentifier(column.databaseName)} = $${params.length}`);
             }
         }
 

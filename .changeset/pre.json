@@ -1,0 +1,10 @@
+{
+  "mode": "pre",
+  "tag": "alpha",
+  "initialVersions": {
+    "mirror-orm": "0.0.0"
+  },
+  "changesets": [
+    "initial-alpha-release"
+  ]
+}

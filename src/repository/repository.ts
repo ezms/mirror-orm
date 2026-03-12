@@ -140,7 +140,7 @@ export class Repository<T> {
             record[pk.propertyKey] = this.generatePk(pk.generation);
         }
 
-        const columns = this.metadata.columns.filter(c => !c.primary || !isIdentity);
+        const columns = this.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
         const names = columns.map(c => this.quoteIdentifier(c.databaseName));
         const values = columns.map(c => record[c.propertyKey]);
         const placeholders = values.map((_, i) => `$${i + 1}`);
@@ -155,7 +155,7 @@ export class Repository<T> {
     }
 
     private async update(record: Record<string, unknown>, pk: IColumnMetadata, pkValue: unknown): Promise<T> {
-        const columns = this.metadata.columns.filter(c => !c.primary);
+        const columns = this.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
         const setClauses = columns.map((c, i) => `${this.quoteIdentifier(c.databaseName)} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
         const sql = `UPDATE ${this.quoteIdentifier(this.metadata.tableName)} SET ${setClauses.join(', ')} WHERE ${this.quoteIdentifier(pk.databaseName)} = $${columns.length + 1} RETURNING *`;

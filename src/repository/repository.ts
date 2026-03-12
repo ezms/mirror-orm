@@ -37,7 +37,7 @@ export class Repository<T> {
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         let sql = `SELECT * FROM ${this.metadata.tableName}`;
-        const params: unknown[] = [];
+        const params: Array<unknown> = [];
 
         if (options.where) {
             const groups = Array.isArray(options.where) ? options.where : [options.where];
@@ -81,7 +81,7 @@ export class Repository<T> {
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
         let sql = `SELECT COUNT(*) FROM ${this.metadata.tableName}`;
-        const params: unknown[] = [];
+        const params: Array<unknown> = [];
 
         if (where) {
             const groups = Array.isArray(where) ? where : [where];
@@ -183,8 +183,8 @@ export class Repository<T> {
         }
     }
 
-    private buildWhereGroup(condition: Record<string, unknown>, params: unknown[]): string[] {
-        const clauses: string[] = [];
+    private buildWhereGroup(condition: Record<string, unknown>, params: Array<unknown>): Array<string> {
+        const clauses: Array<string> = [];
 
         for (const [key, value] of Object.entries(condition)) {
             const column = this.metadata.columns.find(c => c.propertyKey === key);

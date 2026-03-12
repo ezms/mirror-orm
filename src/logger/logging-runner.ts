@@ -8,7 +8,7 @@ export class LoggingQueryRunner implements IQueryRunner {
         protected readonly logger: ILogger,
     ) {}
 
-    public async query<T = unknown>(sql: string, params?: unknown[]): Promise<T[]> {
+    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
         this.logger.query(sql, params);
         return this.runner.query<T>(sql, params);
     }

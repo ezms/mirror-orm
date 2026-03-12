@@ -1,3 +1,3 @@
 export interface ILogger {
-    query(sql: string, params?: unknown[]): void;
+    query(sql: string, params?: Array<unknown>): void;
 }

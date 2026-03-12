@@ -1,8 +1,8 @@
 export interface IQueryOperator {
-    buildClause(columnName: string, startIndex: number): { sql: string; params: unknown[] };
+    buildClause(columnName: string, startIndex: number): { sql: string; params: Array<unknown> };
 }
 
-export function isOperator(value: unknown): value is IQueryOperator {
+export const isOperator = (value: unknown): value is IQueryOperator => {
     return (
         typeof value === 'object' &&
         value !== null &&

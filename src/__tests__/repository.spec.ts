@@ -32,7 +32,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.findAll();
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users');
+            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users"');
             expect(result).toHaveLength(1);
             expect(result[0]).toBeInstanceOf(UserFixture);
             expect(result[0].id).toBe(1);
@@ -58,7 +58,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.findById(1);
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users WHERE id = $1', [1]);
+            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users" WHERE "id" = $1', [1]);
             expect(result).toBeInstanceOf(UserFixture);
             expect(result!.id).toBe(1);
         });
@@ -80,14 +80,14 @@ describe('Repository<UserFixture> (identity PK)', () => {
         it('executes SELECT * with no WHERE when called with empty options', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find();
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM users', []);
+            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users"', []);
         });
 
         it('builds WHERE clause for simple equality', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: { name: 'Emanuel' } });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM users WHERE name = $1',
+                'SELECT * FROM "users" WHERE "name" = $1',
                 ['Emanuel'],
             );
         });
@@ -96,7 +96,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: { name: Like('%manu%') } });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM users WHERE name LIKE $1',
+                'SELECT * FROM "users" WHERE "name" LIKE $1',
                 ['%manu%'],
             );
         });
@@ -114,7 +114,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: [{ name: 'A' }, { name: 'B' }] });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM users WHERE name = $1 OR name = $2',
+                'SELECT * FROM "users" WHERE "name" = $1 OR "name" = $2',
                 ['A', 'B'],
             );
         });
@@ -123,14 +123,14 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: [{ name: 'A', email: 'a@test.com' }, { name: 'B' }] });
             const [sql] = mockQuery.mock.calls[0];
-            expect(sql).toContain('(name = $1 AND email = $2) OR name = $3');
+            expect(sql).toContain('("name" = $1 AND "email" = $2) OR "name" = $3');
         });
 
         it('appends ORDER BY clause', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ orderBy: { name: 'ASC' } });
             const [sql] = mockQuery.mock.calls[0];
-            expect(sql).toContain('ORDER BY name ASC');
+            expect(sql).toContain('ORDER BY "name" ASC');
         });
 
         it('appends LIMIT and OFFSET', async () => {
@@ -162,7 +162,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.count();
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT COUNT(*) FROM users', []);
+            expect(mockQuery).toHaveBeenCalledWith('SELECT COUNT(*) FROM "users"', []);
             expect(result).toBe(42);
         });
 
@@ -175,14 +175,14 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([{ count: '3' }]);
             await repo.count({ name: 'Emanuel' });
             const [sql] = mockQuery.mock.calls[0];
-            expect(sql).toContain('WHERE name = $1');
+            expect(sql).toContain('WHERE "name" = $1');
         });
 
         it('supports OR via array where', async () => {
             mockQuery.mockResolvedValueOnce([{ count: '5' }]);
             await repo.count([{ name: 'A' }, { name: 'B' }]);
             const [sql] = mockQuery.mock.calls[0];
-            expect(sql).toContain('WHERE name = $1 OR name = $2');
+            expect(sql).toContain('WHERE "name" = $1 OR "name" = $2');
         });
     });
 
@@ -199,7 +199,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             const result = await repo.save(user);
 
             const [sql, params] = mockQuery.mock.calls[0];
-            expect(sql).toContain('INSERT INTO users');
+            expect(sql).toContain('INSERT INTO "users"');
             expect(sql).not.toMatch(/\bid\b.*VALUES/);
             expect(sql).toContain('RETURNING *');
             expect(params).toContain('Emanuel');
@@ -228,8 +228,8 @@ describe('Repository<UserFixture> (identity PK)', () => {
             await repo.save(user);
 
             const [sql, params] = mockQuery.mock.calls[0];
-            expect(sql).toContain('UPDATE users');
-            expect(sql).toContain('WHERE id =');
+            expect(sql).toContain('UPDATE "users"');
+            expect(sql).toContain('WHERE "id" =');
             expect(sql).toContain('RETURNING *');
             expect(params).toContain(1);
         });
@@ -246,7 +246,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             await repo.remove(user);
 
-            expect(mockQuery).toHaveBeenCalledWith('DELETE FROM users WHERE id = $1', [5]);
+            expect(mockQuery).toHaveBeenCalledWith('DELETE FROM "users" WHERE "id" = $1', [5]);
         });
 
         it('throws MissingPrimaryKeyError when pk value is absent', async () => {
@@ -305,7 +305,7 @@ describe('Repository<PostFixture> (uuid_v4 PK)', () => {
         await repo.save(post);
 
         const [sql, params] = mockQuery.mock.calls[0];
-        expect(sql).toContain('INSERT INTO posts');
+        expect(sql).toContain('INSERT INTO "posts"');
         expect(sql).toContain('id');
         expect(params[0]).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,

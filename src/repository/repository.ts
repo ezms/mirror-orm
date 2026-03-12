@@ -8,11 +8,25 @@ import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
 export class Repository<T> {
+    private readonly hydratorKeys: Array<[string, string]>;
+    private readonly cachedPrimaryColumn: IColumnMetadata | null;
+
     constructor(
         private readonly target: new () => T,
         private readonly runner: IQueryRunner,
         private readonly metadata: IEntityMetadata,
-    ) {}
+    ) {
+        this.hydratorKeys = this.buildHydratorKeys();
+        this.cachedPrimaryColumn = this.resolvePrimaryColumn();
+    }
+
+    private buildHydratorKeys(): Array<[string, string]> {
+        return this.metadata.columns.map(c => [c.propertyKey, c.databaseName]);
+    }
+
+    private resolvePrimaryColumn(): IColumnMetadata | null {
+        return this.metadata.columns.find(c => c.primary) ?? null;
+    }
 
     private quoteIdentifier(identifier: string): string {
         return `"${identifier}"`;
@@ -169,7 +183,7 @@ export class Repository<T> {
     }
 
     private primaryColumn(): IColumnMetadata {
-        const pk = this.metadata.columns.find(c => c.primary);
+        const pk = this.cachedPrimaryColumn;
         if (!pk) throw new NoPrimaryColumnError(this.metadata.className);
         return pk;
     }
@@ -208,12 +222,11 @@ export class Repository<T> {
     }
 
     private hydrate(row: Record<string, unknown>): T {
-        const instance = new this.target();
+        const instance = Object.create(this.target.prototype) as T;
 
-        for (const column of this.metadata.columns) {
-            if (column.databaseName in row) {
-                (instance as Record<string, unknown>)[column.propertyKey] = row[column.databaseName];
-            }
+        for (let i = 0; i < this.hydratorKeys.length; i++) {
+            const val = row[this.hydratorKeys[i][1]];
+            if (val !== undefined) (instance as Record<string, unknown>)[this.hydratorKeys[i][0]] = val;
         }
 
         return instance;

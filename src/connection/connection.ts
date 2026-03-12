@@ -18,6 +18,10 @@ export class Connection {
         return Connection.create({ ...config, adapter: new PgAdapter() });
     }
 
+    public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {
+        return new Connection({ adapter: { connect: async () => {}, query: runner.query.bind(runner), acquireTransactionRunner: async () => { throw new Error('transactions not supported on fromRunner'); }, disconnect: async () => {} } });
+    }
+
     public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
         return this.options.adapter.query<T>(sql, params);
     }

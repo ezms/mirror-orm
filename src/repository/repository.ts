@@ -8,24 +8,41 @@ import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
 export class Repository<T> {
-    private readonly hydratorKeys: Array<[string, string]>;
     private readonly cachedPrimaryColumn: IColumnMetadata | null;
+    private readonly quotedTableName: string;
+    private readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
+    private readonly hydrator: (row: Record<string, unknown>) => T;
 
     constructor(
         private readonly target: new () => T,
         private readonly runner: IQueryRunner,
         private readonly metadata: IEntityMetadata,
     ) {
-        this.hydratorKeys = this.buildHydratorKeys();
+        this.quotedTableName = this.quoteIdentifier(metadata.tableName);
+        this.columnMap = this.buildColumnMap();
         this.cachedPrimaryColumn = this.resolvePrimaryColumn();
+        this.hydrator = this.buildHydrator();
     }
 
-    private buildHydratorKeys(): Array<[string, string]> {
-        return this.metadata.columns.map(c => [c.propertyKey, c.databaseName]);
+    private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
+        return new Map(
+            this.metadata.columns.map(c => [
+                c.propertyKey,
+                { ...c, quotedDatabaseName: this.quoteIdentifier(c.databaseName) },
+            ]),
+        );
     }
 
     private resolvePrimaryColumn(): IColumnMetadata | null {
         return this.metadata.columns.find(c => c.primary) ?? null;
+    }
+
+    private buildHydrator(): (row: Record<string, unknown>) => T {
+        const assignments = this.metadata.columns
+            .map(c => `if(r["${c.databaseName}"]!==undefined)i["${c.propertyKey}"]=r["${c.databaseName}"];`)
+            .join('');
+        const fn = new Function('C', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
+        return fn(this.target) as (row: Record<string, unknown>) => T;
     }
 
     private quoteIdentifier(identifier: string): string {
@@ -33,10 +50,10 @@ export class Repository<T> {
     }
 
     public async findAll(): Promise<Array<T>> {
-        const sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
+        const sql = `SELECT * FROM ${this.quotedTableName}`;
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql);
-            return rows.map(row => this.hydrate(row));
+            return rows.map(this.hydrator);
         } catch (error) {
             throw new QueryError(sql, error);
         }
@@ -44,17 +61,17 @@ export class Repository<T> {
 
     public async findById(id: number | string): Promise<T | null> {
         const pk = this.primaryColumn();
-        const sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)} WHERE ${this.quoteIdentifier(pk.databaseName)} = $1`;
+        const sql = `SELECT * FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, [id]);
-            return rows.length > 0 ? this.hydrate(rows[0]) : null;
+            return rows.length > 0 ? this.hydrator(rows[0]) : null;
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        let sql = `SELECT * FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
+        let sql = `SELECT * FROM ${this.quotedTableName}`;
         const params: Array<unknown> = [];
 
         if (options.where) {
@@ -72,8 +89,8 @@ export class Repository<T> {
         if (options.orderBy) {
             const orderClauses = Object.entries(options.orderBy)
                 .map(([key, direction]) => {
-                    const column = this.metadata.columns.find(c => c.propertyKey === key);
-                    return column ? `${this.quoteIdentifier(column.databaseName)} ${direction}` : null;
+                    const column = this.columnMap.get(key);
+                    return column ? `${column.quotedDatabaseName} ${direction}` : null;
                 })
                 .filter((clause): clause is string => clause !== null);
 
@@ -91,14 +108,14 @@ export class Repository<T> {
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, params);
-            return rows.map(row => this.hydrate(row));
+            return rows.map(this.hydrator);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
-        let sql = `SELECT COUNT(*) FROM ${this.quoteIdentifier(this.metadata.tableName)}`;
+        let sql = `SELECT COUNT(*) FROM ${this.quotedTableName}`;
         const params: Array<unknown> = [];
 
         if (where) {
@@ -139,7 +156,7 @@ export class Repository<T> {
             throw new MissingPrimaryKeyError(this.metadata.className, 'remove');
         }
 
-        const sql = `DELETE FROM ${this.quoteIdentifier(this.metadata.tableName)} WHERE ${this.quoteIdentifier(pk.databaseName)} = $1`;
+        const sql = `DELETE FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
         try {
             await this.runner.query(sql, [pkValue]);
         } catch (error) {
@@ -155,37 +172,37 @@ export class Repository<T> {
         }
 
         const columns = this.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
-        const names = columns.map(c => this.quoteIdentifier(c.databaseName));
+        const names = columns.map(c => this.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const values = columns.map(c => record[c.propertyKey]);
         const placeholders = values.map((_, i) => `$${i + 1}`);
-        const sql = `INSERT INTO ${this.quoteIdentifier(this.metadata.tableName)} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+        const sql = `INSERT INTO ${this.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, values);
-            return this.hydrate(rows[0]);
+            return this.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
-    private async update(record: Record<string, unknown>, pk: IColumnMetadata, pkValue: unknown): Promise<T> {
+    private async update(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
         const columns = this.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
-        const setClauses = columns.map((c, i) => `${this.quoteIdentifier(c.databaseName)} = $${i + 1}`);
+        const setClauses = columns.map((c, i) => `${this.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
-        const sql = `UPDATE ${this.quoteIdentifier(this.metadata.tableName)} SET ${setClauses.join(', ')} WHERE ${this.quoteIdentifier(pk.databaseName)} = $${columns.length + 1} RETURNING *`;
+        const sql = `UPDATE ${this.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = $${columns.length + 1} RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, [...values, pkValue]);
-            return this.hydrate(rows[0]);
+            return this.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
-    private primaryColumn(): IColumnMetadata {
+    private primaryColumn(): IColumnMetadata & { quotedDatabaseName: string } {
         const pk = this.cachedPrimaryColumn;
         if (!pk) throw new NoPrimaryColumnError(this.metadata.className);
-        return pk;
+        return this.columnMap.get(pk.propertyKey)!;
     }
 
     private generatePk(generation: IGenerationOptions): string | number {
@@ -205,30 +222,19 @@ export class Repository<T> {
         const clauses: Array<string> = [];
 
         for (const [key, value] of Object.entries(condition)) {
-            const column = this.metadata.columns.find(c => c.propertyKey === key);
+            const column = this.columnMap.get(key);
             if (!column) continue;
 
             if (isOperator(value)) {
-                const { sql, params: opParams } = value.buildClause(this.quoteIdentifier(column.databaseName), params.length + 1);
+                const { sql, params: opParams } = value.buildClause(column.quotedDatabaseName, params.length + 1);
                 clauses.push(sql);
                 params.push(...opParams);
             } else {
                 params.push(value);
-                clauses.push(`${this.quoteIdentifier(column.databaseName)} = $${params.length}`);
+                clauses.push(`${column.quotedDatabaseName} = $${params.length}`);
             }
         }
 
         return clauses;
-    }
-
-    private hydrate(row: Record<string, unknown>): T {
-        const instance = Object.create(this.target.prototype) as T;
-
-        for (let i = 0; i < this.hydratorKeys.length; i++) {
-            const val = row[this.hydratorKeys[i][1]];
-            if (val !== undefined) (instance as Record<string, unknown>)[this.hydratorKeys[i][0]] = val;
-        }
-
-        return instance;
     }
 }

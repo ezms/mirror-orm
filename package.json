@@ -2,7 +2,9 @@
     "name": "mirror-orm",
     "version": "1.0.0",
     "description": "",
-    "main": "index.js",
+    "main": "dist/index.js",
+    "module": "dist/index.js",
+    "types": "dist/index.d.ts",
     "scripts": {
         "build": "tsc",
         "lint": "eslint src/**/*.ts",
@@ -33,5 +35,11 @@
     },
     "dependencies": {
         "pg": "^8.20.0"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "default": "./dist/index.js"
+        }
     }
 }

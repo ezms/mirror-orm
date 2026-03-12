@@ -7,8 +7,12 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
-        "forceConsistentCasingInFileNames": true
+        "forceConsistentCasingInFileNames": true,
+        "declaration": true, 
+        "declarationMap": true,
+        "experimentalDecorators": false,
+        "emitDecoratorMetadata": false
     },
     "include": ["src/**/*"],
-    "exclude": ["src/__tests__/**"]
+    "exclude": ["node_modules", "dist", "src/__tests__/**"]
 }

@@ -17,7 +17,7 @@ const applyEntity = (tableName: string | undefined, context: ClassDecoratorConte
     const relations = (context.metadata?.[RELATIONS_KEY] as Array<IRelationMetadata> | undefined) ?? [];
 
     registry.registerEntity(className, {
-        tableName: tableName ?? className,
+        tableName: tableName ?? className.toLowerCase(),
         className,
         columns,
         relations,

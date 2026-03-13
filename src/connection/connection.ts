@@ -2,11 +2,13 @@ import { PgAdapter } from '../adapters/pg/pg-adapter';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
-import { Repository } from '../repository/repository';
+import { Repository, RepositoryState } from '../repository/repository';
 import { IConnectionConfig, IConnectionOptions } from './connection-options';
 import { TransactionContext } from './transaction-context';
 
 export class Connection {
+    private readonly repoCache = new Map<string, RepositoryState<unknown>>();
+
     private constructor(private readonly options: IConnectionOptions) {}
 
     public static async create(options: IConnectionOptions): Promise<Connection> {
@@ -27,9 +29,7 @@ export class Connection {
     }
 
     public getRepository<T>(target: new () => T): Repository<T> {
-        const metadata = registry.getEntity(target.name);
-        if (!metadata) throw new Error(`Entity "${target.name}" not registered. Did you add @Entity?`);
-        return new Repository(target, this.withLogger(this), metadata);
+        return new Repository(this.getOrCompile(target), this.withLogger(this));
     }
 
     public async transaction<R>(callback: (trx: TransactionContext) => Promise<R>): Promise<R> {
@@ -38,7 +38,12 @@ export class Connection {
             ? new LoggingTransactionRunner(runner, this.options.logger)
             : runner;
         try {
-            const result = await callback(new TransactionContext(loggingRunner));
+            const result = await callback(
+                new TransactionContext(
+                    loggingRunner,
+                    <T>(target: new () => T) => new Repository<T>(this.getOrCompile(target), loggingRunner),
+                ),
+            );
             await runner.commit();
             return result;
         } catch (error) {
@@ -51,6 +56,18 @@ export class Connection {
 
     public async disconnect(): Promise<void> {
         await this.options.adapter.disconnect();
+    }
+
+    private getOrCompile<T>(target: new () => T): RepositoryState<T> {
+        const key = target.name;
+        if (this.repoCache.has(key)) {
+            return this.repoCache.get(key) as RepositoryState<T>;
+        }
+        const metadata = registry.getEntity(key);
+        if (!metadata) throw new Error(`Entity "${key}" not registered. Did you add @Entity?`);
+        const state = new RepositoryState(target, metadata);
+        this.repoCache.set(key, state as RepositoryState<unknown>);
+        return state;
     }
 
     private withLogger(runner: IQueryRunner): IQueryRunner {

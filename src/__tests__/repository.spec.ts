@@ -283,6 +283,33 @@ describe('Repository<UserFixture> (identity PK)', () => {
             await expect(badRepo.findAll()).resolves.toEqual([]);
         });
     });
+
+    // ─── withTransaction ─────────────────────────────────────────────────────
+
+    describe('withTransaction', () => {
+        it('returns a new Repository bound to the provided runner', async () => {
+            const txMock = vi.fn().mockResolvedValueOnce([{ id: 1, name: 'TX', email: 'tx@test.com' }]);
+            const txRepo = repo.withTransaction({ query: txMock });
+
+            const result = await txRepo.findAll();
+
+            expect(txMock).toHaveBeenCalled();
+            expect(mockQuery).not.toHaveBeenCalled();
+            expect(result[0]).toBeInstanceOf(UserFixture);
+            expect(result[0].name).toBe('TX');
+        });
+
+        it('reuses compiled state — same SQL as original repository', async () => {
+            const txMock = vi.fn().mockResolvedValueOnce([]);
+            const txRepo = repo.withTransaction({ query: txMock });
+
+            await txRepo.findAll();
+
+            expect(txMock).toHaveBeenCalledWith(
+                expect.objectContaining({ text: 'SELECT "id", "name", "email" FROM "users"' }),
+            );
+        });
+    });
 });
 
 // ─── Repository<PostFixture> (uuid_v4 PK) ───────────────────────────────────

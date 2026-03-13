@@ -15,20 +15,20 @@ const HYDRATOR_HELPERS = Object.freeze({
     },
 });
 
-export class Repository<T> {
-    private readonly cachedPrimaryColumn: IColumnMetadata | null;
-    private readonly quotedTableName: string;
-    private readonly selectClause: string;
-    private readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
-    private readonly hydrator: (row: Record<string, unknown>) => T;
-    private readonly findAllStatement: INamedQuery;
-    private readonly findByIdStatement: INamedQuery | null;
+export class RepositoryState<T> {
+    public readonly cachedPrimaryColumn: IColumnMetadata | null;
+    public readonly quotedTableName: string;
+    public readonly selectClause: string;
+    public readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
+    public readonly hydrator: (row: Record<string, unknown>) => T;
+    public readonly findAllStatement: INamedQuery;
+    public readonly findByIdStatement: INamedQuery | null;
+    public readonly metadata: IEntityMetadata;
+    public readonly target: new () => T;
 
-    constructor(
-        private readonly target: new () => T,
-        private readonly runner: IQueryRunner,
-        private readonly metadata: IEntityMetadata,
-    ) {
+    constructor(target: new () => T, metadata: IEntityMetadata) {
+        this.target = target;
+        this.metadata = metadata;
         this.quotedTableName = this.quoteIdentifier(metadata.tableName);
         this.columnMap = this.buildColumnMap();
         this.selectClause = this.buildSelectClause();
@@ -36,6 +36,10 @@ export class Repository<T> {
         this.hydrator = this.buildHydrator();
         this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}` };
         this.findByIdStatement = this.buildFindByIdStatement();
+    }
+
+    public quoteIdentifier(identifier: string): string {
+        return `"${identifier}"`;
     }
 
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
@@ -89,33 +93,54 @@ export class Repository<T> {
             default:         return v;
         }
     }
+}
 
-    private quoteIdentifier(identifier: string): string {
-        return `"${identifier}"`;
+export class Repository<T> {
+    private readonly state: RepositoryState<T>;
+    private readonly runner: IQueryRunner;
+
+    constructor(target: new () => T, runner: IQueryRunner, metadata: IEntityMetadata);
+    constructor(state: RepositoryState<T>, runner: IQueryRunner);
+    constructor(
+        targetOrState: (new () => T) | RepositoryState<T>,
+        runner: IQueryRunner,
+        metadata?: IEntityMetadata,
+    ) {
+        this.runner = runner;
+        if (targetOrState instanceof RepositoryState) {
+            this.state = targetOrState;
+        } else {
+            this.state = new RepositoryState(targetOrState, metadata!);
+        }
+    }
+
+    public withTransaction(runner: IQueryRunner): Repository<T> {
+        return new Repository(this.state, runner);
     }
 
     public async findAll(): Promise<Array<T>> {
+        const stmt = this.state.findAllStatement;
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(this.findAllStatement);
-            return rows.map(this.hydrator);
+            const rows = await this.runner.query<Record<string, unknown>>(stmt);
+            return rows.map(this.state.hydrator);
         } catch (error) {
-            throw new QueryError(this.findAllStatement.text, error);
+            throw new QueryError(stmt.text, error);
         }
     }
 
     public async findById(id: number | string): Promise<T | null> {
-        const stmt = this.findByIdStatement;
-        if (!stmt) throw new NoPrimaryColumnError(this.metadata.className);
+        const stmt = this.state.findByIdStatement;
+        if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
         try {
             const rows = await this.runner.query<Record<string, unknown>>({ ...stmt, values: [id] });
-            return rows.length > 0 ? this.hydrator(rows[0]) : null;
+            return rows.length > 0 ? this.state.hydrator(rows[0]) : null;
         } catch (error) {
             throw new QueryError(stmt.text, error);
         }
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        let sql = `SELECT ${this.selectClause} FROM ${this.quotedTableName}`;
+        let sql = `SELECT ${this.state.selectClause} FROM ${this.state.quotedTableName}`;
         const params: Array<unknown> = [];
 
         if (options.where) {
@@ -133,7 +158,7 @@ export class Repository<T> {
         if (options.orderBy) {
             const orderClauses = Object.entries(options.orderBy)
                 .map(([key, direction]) => {
-                    const column = this.columnMap.get(key);
+                    const column = this.state.columnMap.get(key);
                     return column ? `${column.quotedDatabaseName} ${direction}` : null;
                 })
                 .filter((clause): clause is string => clause !== null);
@@ -152,14 +177,14 @@ export class Repository<T> {
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, params);
-            return rows.map(this.hydrator);
+            return rows.map(this.state.hydrator);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
-        let sql = `SELECT COUNT(*) FROM ${this.quotedTableName}`;
+        let sql = `SELECT COUNT(*) FROM ${this.state.quotedTableName}`;
         const params: Array<unknown> = [];
 
         if (where) {
@@ -197,10 +222,10 @@ export class Repository<T> {
         const pkValue = (entity as Record<string, unknown>)[pk.propertyKey];
 
         if (typeof pkValue === 'undefined' || pkValue === null) {
-            throw new MissingPrimaryKeyError(this.metadata.className, 'remove');
+            throw new MissingPrimaryKeyError(this.state.metadata.className, 'remove');
         }
 
-        const sql = `DELETE FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
+        const sql = `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
         try {
             await this.runner.query(sql, [pkValue]);
         } catch (error) {
@@ -215,38 +240,38 @@ export class Repository<T> {
             record[pk.propertyKey] = this.generatePk(pk.generation);
         }
 
-        const columns = this.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
-        const names = columns.map(c => this.columnMap.get(c.propertyKey)!.quotedDatabaseName);
+        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
+        const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const values = columns.map(c => record[c.propertyKey]);
         const placeholders = values.map((_, i) => `$${i + 1}`);
-        const sql = `INSERT INTO ${this.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
+        const sql = `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, values);
-            return this.hydrator(rows[0]);
+            return this.state.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
     private async update(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
-        const columns = this.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
-        const setClauses = columns.map((c, i) => `${this.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
+        const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
+        const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
-        const sql = `UPDATE ${this.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = $${columns.length + 1} RETURNING *`;
+        const sql = `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = $${columns.length + 1} RETURNING *`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, [...values, pkValue]);
-            return this.hydrator(rows[0]);
+            return this.state.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
     }
 
     private primaryColumn(): IColumnMetadata & { quotedDatabaseName: string } {
-        const pk = this.cachedPrimaryColumn;
-        if (!pk) throw new NoPrimaryColumnError(this.metadata.className);
-        return this.columnMap.get(pk.propertyKey)!;
+        const pk = this.state.cachedPrimaryColumn;
+        if (!pk) throw new NoPrimaryColumnError(this.state.metadata.className);
+        return this.state.columnMap.get(pk.propertyKey)!;
     }
 
     private generatePk(generation: IGenerationOptions): string | number {
@@ -266,7 +291,7 @@ export class Repository<T> {
         const clauses: Array<string> = [];
 
         for (const [key, value] of Object.entries(condition)) {
-            const column = this.columnMap.get(key);
+            const column = this.state.columnMap.get(key);
             if (!column) continue;
 
             if (isOperator(value)) {

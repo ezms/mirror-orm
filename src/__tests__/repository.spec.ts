@@ -5,11 +5,12 @@ import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Like } from '../operators';
 import { Repository } from '../repository/repository';
-import { PostFixture, UserFixture } from './fixtures/user.entity';
+import { AccountFixture, PostFixture, UserFixture } from './fixtures/user.entity';
 
 // force decorator registration
 void UserFixture;
 void PostFixture;
+void AccountFixture;
 
 describe('Repository<UserFixture> (identity PK)', () => {
     let mockQuery: Mock;
@@ -310,5 +311,238 @@ describe('Repository<PostFixture> (uuid_v4 PK)', () => {
         expect(params[0]).toMatch(
             /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
         );
+    });
+});
+
+// ─── Type casting (AccountFixture) ──────────────────────────────────────────
+
+describe('Repository<AccountFixture> — type casting', () => {
+    let mockQuery: Mock;
+    let repo: Repository<AccountFixture>;
+
+    beforeEach(() => {
+        const metadata = registry.getEntity('AccountFixture')!;
+        mockQuery = vi.fn();
+        repo = new Repository(AccountFixture, { query: mockQuery }, metadata);
+    });
+
+    it('coerces numeric string to number for type: number', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '1234.56', is_active: true, created_at: '2026-01-01', label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].balance).toBe(1234.56);
+        expect(typeof result[0].balance).toBe('number');
+    });
+
+    it('returns null for null numeric column', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: null, is_active: true, created_at: '2026-01-01', label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].balance).toBeNull();
+    });
+
+    it('coerces value to boolean for type: boolean', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01', label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].isActive).toBe(true);
+        expect(typeof result[0].isActive).toBe('boolean');
+    });
+
+    it('returns null for null boolean column', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '0', is_active: null, created_at: '2026-01-01', label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].isActive).toBeNull();
+    });
+
+    it('coerces string to Date for type: datetime', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01T00:00:00.000Z', label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].createdAt).toBeInstanceOf(Date);
+    });
+
+    it('returns null for null datetime column', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '0', is_active: true, created_at: null, label: 'main' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].createdAt).toBeNull();
+    });
+
+    it('leaves string column unchanged without type cast', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01', label: 'savings' },
+        ]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].label).toBe('savings');
+        expect(typeof result[0].label).toBe('string');
+    });
+});
+
+// ─── type: 'bigint' ──────────────────────────────────────────────────────────
+
+describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
+    const bigintMeta: IEntityMetadata = {
+        tableName: 'sequences',
+        className: 'Sequence',
+        columns: [
+            { propertyKey: 'id',  databaseName: 'id',  options: {},                 primary: true  },
+            { propertyKey: 'seq', databaseName: 'seq', options: { type: 'bigint' }, primary: false },
+        ],
+    };
+
+    class Sequence { id!: number; seq!: bigint; }
+
+    let mockQuery: Mock;
+    let repo: Repository<Sequence>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(Sequence, { query: mockQuery }, bigintMeta);
+    });
+
+    it('coerces INT8 string to BigInt', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, seq: '9223372036854775807' }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].seq).toBe(9223372036854775807n);
+        expect(typeof result[0].seq).toBe('bigint');
+    });
+
+    it('preserves full precision beyond Number.MAX_SAFE_INTEGER', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, seq: '9007199254740993' }]);
+
+        const result = await repo.findAll();
+
+        // +("9007199254740993") perde precisão: 9007199254740992
+        // BigInt preserva exatamente
+        expect(result[0].seq).toBe(9007199254740993n);
+    });
+
+    it('returns null for null bigint column', async () => {
+        const nullMeta: IEntityMetadata = {
+            ...bigintMeta,
+            columns: [
+                ...bigintMeta.columns,
+                { propertyKey: 'seqNull', databaseName: 'seq_null', options: { type: 'bigint' }, primary: false },
+            ],
+        };
+        class SeqWithNull { id!: number; seq!: bigint; seqNull!: bigint | null; }
+        const r = new Repository(SeqWithNull, { query: mockQuery }, nullMeta);
+
+        mockQuery.mockResolvedValueOnce([{ id: 1, seq: '1', seq_null: null }]);
+
+        const result = await r.findAll();
+
+        expect(result[0].seqNull).toBeNull();
+    });
+});
+
+// ─── type: 'iso' e 'date-only' ───────────────────────────────────────────────
+
+describe("type: 'iso' — TIMESTAMP → UTC ISO string", () => {
+    const meta: IEntityMetadata = {
+        tableName: 'events',
+        className: 'Event',
+        columns: [
+            { propertyKey: 'id',         databaseName: 'id',          options: {},                primary: true  },
+            { propertyKey: 'occurredAt', databaseName: 'occurred_at', options: { type: 'iso' },   primary: false },
+        ],
+    };
+    class Event { id!: number; occurredAt!: string; }
+
+    let mockQuery: Mock;
+    let repo: Repository<Event>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(Event, { query: mockQuery }, meta);
+    });
+
+    it('returns an ISO 8601 string from a Date value', async () => {
+        const date = new Date('2026-03-13T15:00:00.000Z');
+        mockQuery.mockResolvedValueOnce([{ id: 1, occurred_at: date }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].occurredAt).toBe('2026-03-13T15:00:00.000Z');
+        expect(typeof result[0].occurredAt).toBe('string');
+    });
+
+    it('accepts a raw date string and normalises to ISO', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, occurred_at: '2026-03-13T15:00:00.000Z' }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].occurredAt).toBe('2026-03-13T15:00:00.000Z');
+    });
+
+    it('returns null for null column', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, occurred_at: null }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].occurredAt).toBeNull();
+    });
+});
+
+describe("type: 'date' — DATE → YYYY-MM-DD string (no time, no timezone shift)", () => {
+    const meta: IEntityMetadata = {
+        tableName: 'profiles',
+        className: 'Profile',
+        columns: [
+            { propertyKey: 'id',        databaseName: 'id',         options: {},               primary: true  },
+            { propertyKey: 'birthDate', databaseName: 'birth_date', options: { type: 'date' }, primary: false },
+        ],
+    };
+    class Profile { id!: number; birthDate!: string; }
+
+    let mockQuery: Mock;
+    let repo: Repository<Profile>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(Profile, { query: mockQuery }, meta);
+    });
+
+    it('returns YYYY-MM-DD string from a Date value', async () => {
+        // pg returns DATE as local midnight Date — simula um Date de 2026-03-13
+        const localMidnight = new Date(2026, 2, 13); // mês 0-based
+        mockQuery.mockResolvedValueOnce([{ id: 1, birth_date: localMidnight }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].birthDate).toBe('2026-03-13');
+        expect(typeof result[0].birthDate).toBe('string');
+    });
+
+    it('returns null for null column', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, birth_date: null }]);
+
+        const result = await repo.findAll();
+
+        expect(result[0].birthDate).toBeNull();
     });
 });

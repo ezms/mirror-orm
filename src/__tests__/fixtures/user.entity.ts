@@ -22,3 +22,21 @@ export class PostFixture {
     @Column()
     title!: string;
 }
+
+@Entity('accounts')
+export class AccountFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column({ type: 'number' })
+    balance!: number;
+
+    @Column({ name: 'is_active', type: 'boolean' })
+    isActive!: boolean;
+
+    @Column({ name: 'created_at', type: 'datetime' })
+    createdAt!: Date;
+
+    @Column()
+    label!: string;
+}

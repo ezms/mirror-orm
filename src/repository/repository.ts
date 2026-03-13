@@ -7,6 +7,14 @@ import { INamedQuery, IQueryRunner } from '../interfaces/query-runner';
 import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
+const HYDRATOR_HELPERS = Object.freeze({
+    dateOnly: (v: Date): string => {
+        const m = String(v.getMonth() + 1).padStart(2, '0');
+        const d = String(v.getDate()).padStart(2, '0');
+        return `${v.getFullYear()}-${m}-${d}`;
+    },
+});
+
 export class Repository<T> {
     private readonly cachedPrimaryColumn: IColumnMetadata | null;
     private readonly quotedTableName: string;
@@ -58,10 +66,28 @@ export class Repository<T> {
 
     private buildHydrator(): (row: Record<string, unknown>) => T {
         const assignments = this.metadata.columns
-            .map(c => `if(r["${c.databaseName}"]!==undefined)i["${c.propertyKey}"]=r["${c.databaseName}"];`)
+            .map(c => {
+                const db = c.databaseName;
+                const prop = c.propertyKey;
+                const rhs = this.buildCastExpression(db, c.options.type);
+                return `if(r["${db}"]!==undefined)i["${prop}"]=${rhs};`;
+            })
             .join('');
-        const fn = new Function('C', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
-        return fn(this.target) as (row: Record<string, unknown>) => T;
+        const fn = new Function('C', 'H', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
+        return fn(this.target, HYDRATOR_HELPERS) as (row: Record<string, unknown>) => T;
+    }
+
+    private buildCastExpression(db: string, type: import('../interfaces/column-options').ColumnType | undefined): string {
+        const v = `r["${db}"]`;
+        switch (type) {
+            case 'number':   return `${v}!==null?+${v}:null`;
+            case 'bigint':   return `${v}!==null?BigInt(${v}):null`;
+            case 'boolean':  return `${v}!==null?Boolean(${v}):null`;
+            case 'datetime': return `${v}!==null?new Date(${v}):null`;
+            case 'date':     return `${v}!==null?H.dateOnly(${v}):null`;
+            case 'iso':      return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            default:         return v;
+        }
     }
 
     private quoteIdentifier(identifier: string): string {

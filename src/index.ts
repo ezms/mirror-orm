@@ -46,7 +46,7 @@ export { QueryError } from './errors/query.error';
 
 // ─── Types & Interfaces ───────────────────────────────────────────────────────
 export type { IFindOptions, WhereCondition } from './interfaces/find-options';
-export type { IColumnOptions } from './interfaces/column-options';
+export type { IColumnOptions, ColumnType } from './interfaces/column-options';
 export type { IPrimaryColumnOptions } from './interfaces/primary-column-options';
 export type { GenerationStrategy } from './interfaces/generation-strategy';
 export type { INamedQuery, IQueryRunner } from './interfaces/query-runner';

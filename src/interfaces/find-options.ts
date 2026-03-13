@@ -5,4 +5,5 @@ export interface IFindOptions<T> {
     orderBy?: Partial<Record<keyof T, 'ASC' | 'DESC'>>;
     limit?: number;
     offset?: number;
+    relations?: Array<keyof T & string>;
 }

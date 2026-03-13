@@ -5,6 +5,8 @@ import './polyfills';
 export { Entity } from './decorators/entity';
 export { Column } from './decorators/column';
 export { PrimaryColumn } from './decorators/primary-column';
+export { ManyToOne } from './decorators/many-to-one';
+export { OneToMany } from './decorators/one-to-many';
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';
@@ -51,3 +53,4 @@ export type { IPrimaryColumnOptions } from './interfaces/primary-column-options'
 export type { GenerationStrategy } from './interfaces/generation-strategy';
 export type { INamedQuery, IQueryRunner } from './interfaces/query-runner';
 export type { ITransactionRunner } from './interfaces/transaction-runner';
+export type { IRelationMetadata, RelationType } from './interfaces/relation-metadata';

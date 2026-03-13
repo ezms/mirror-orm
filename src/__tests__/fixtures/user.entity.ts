@@ -1,5 +1,7 @@
 import { Column } from '../../decorators/column';
 import { Entity } from '../../decorators/entity';
+import { ManyToOne } from '../../decorators/many-to-one';
+import { OneToMany } from '../../decorators/one-to-many';
 import { PrimaryColumn } from '../../decorators/primary-column';
 
 @Entity('users')
@@ -39,4 +41,31 @@ export class AccountFixture {
 
     @Column()
     label!: string;
+}
+
+@Entity('authors')
+export class AuthorFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    name!: string;
+
+    @OneToMany(() => BookFixture, 'author_id')
+    books!: BookFixture[];
+}
+
+@Entity('books')
+export class BookFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    title!: string;
+
+    @Column({ name: 'author_id' })
+    authorId!: number;
+
+    @ManyToOne(() => AuthorFixture, 'author_id')
+    author!: AuthorFixture;
 }

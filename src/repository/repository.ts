@@ -3,7 +3,9 @@ import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
+import { IRelationMetadata } from '../interfaces/relation-metadata';
 import { INamedQuery, IQueryRunner } from '../interfaces/query-runner';
+import { registry } from '../metadata/registry';
 import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
@@ -19,6 +21,7 @@ export class RepositoryState<T> {
     public readonly cachedPrimaryColumn: IColumnMetadata | null;
     public readonly quotedTableName: string;
     public readonly selectClause: string;
+    public readonly qualifiedSelectClause: string;
     public readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
     public readonly hydrator: (row: Record<string, unknown>) => T;
     public readonly findAllStatement: INamedQuery;
@@ -26,12 +29,16 @@ export class RepositoryState<T> {
     public readonly metadata: IEntityMetadata;
     public readonly target: new () => T;
 
+    private readonly relatedStateCache = new Map<string, RepositoryState<unknown>>();
+    private readonly prefixedHydratorCache = new Map<string, (row: Record<string, unknown>) => T>();
+
     constructor(target: new () => T, metadata: IEntityMetadata) {
         this.target = target;
         this.metadata = metadata;
         this.quotedTableName = this.quoteIdentifier(metadata.tableName);
         this.columnMap = this.buildColumnMap();
         this.selectClause = this.buildSelectClause();
+        this.qualifiedSelectClause = this.buildQualifiedSelectClause();
         this.cachedPrimaryColumn = this.resolvePrimaryColumn();
         this.hydrator = this.buildHydrator();
         this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}` };
@@ -53,6 +60,40 @@ export class RepositoryState<T> {
 
     private buildSelectClause(): string {
         return [...this.columnMap.values()].map(c => c.quotedDatabaseName).join(', ');
+    }
+
+    private buildQualifiedSelectClause(): string {
+        return [...this.columnMap.values()]
+            .map(c => `${this.quotedTableName}.${c.quotedDatabaseName}`)
+            .join(', ');
+    }
+
+    public getRelatedState(relation: IRelationMetadata): RepositoryState<unknown> {
+        const cached = this.relatedStateCache.get(relation.propertyKey);
+        if (cached) return cached;
+        const targetCtor = relation.target() as new () => unknown;
+        const meta = registry.getEntity(targetCtor.name);
+        if (!meta) throw new Error(`Related entity "${targetCtor.name}" not registered. Did you add @Entity?`);
+        const state = new RepositoryState(targetCtor, meta);
+        this.relatedStateCache.set(relation.propertyKey, state);
+        return state;
+    }
+
+    public getOrBuildPrefixedHydrator(prefix: string): (row: Record<string, unknown>) => T {
+        const cached = this.prefixedHydratorCache.get(prefix);
+        if (cached) return cached;
+        const assignments = this.metadata.columns
+            .map(c => {
+                const db = `${prefix}${c.databaseName}`;
+                const prop = c.propertyKey;
+                const rhs = this.buildCastExpression(db, c.options.type);
+                return `if(r["${db}"]!==undefined&&r["${db}"]!==null)i["${prop}"]=${rhs};`;
+            })
+            .join('');
+        const fn = new Function('C', 'H', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
+        const hydrator = fn(this.target, HYDRATOR_HELPERS) as (row: Record<string, unknown>) => T;
+        this.prefixedHydratorCache.set(prefix, hydrator);
+        return hydrator;
     }
 
     private resolvePrimaryColumn(): IColumnMetadata | null {
@@ -140,8 +181,58 @@ export class Repository<T> {
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        let sql = `SELECT ${this.state.selectClause} FROM ${this.state.quotedTableName}`;
+        const requestedRelations = options.relations ?? [];
+
+        type ManyToOneInfo = {
+            relation: IRelationMetadata;
+            relatedState: RepositoryState<unknown>;
+            prefix: string;
+            prefixedHydrator: (row: Record<string, unknown>) => unknown;
+            pkDbName: string;
+        };
+
+        const mtoRelations: Array<ManyToOneInfo> = [];
+        const otmRelations: Array<{ relation: IRelationMetadata; relatedState: RepositoryState<unknown> }> = [];
+
+        for (const relName of requestedRelations) {
+            const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
+            if (!relation) continue;
+            const relatedState = this.state.getRelatedState(relation);
+            if (relation.type === 'many-to-one') {
+                const prefix = `mirror__${relation.propertyKey}__`;
+                mtoRelations.push({
+                    relation,
+                    relatedState,
+                    prefix,
+                    prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
+                    pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
+                });
+            } else {
+                otmRelations.push({ relation, relatedState });
+            }
+        }
+
         const params: Array<unknown> = [];
+
+        // SELECT: qualify main columns when JOINs are needed to avoid ambiguity
+        let selectPart = mtoRelations.length > 0 ? this.state.qualifiedSelectClause : this.state.selectClause;
+
+        if (mtoRelations.length > 0) {
+            const joinCols = mtoRelations.flatMap(({ relatedState, prefix }) =>
+                [...relatedState.columnMap.values()].map(
+                    c => `${relatedState.quotedTableName}.${c.quotedDatabaseName} AS "${prefix}${c.databaseName}"`,
+                ),
+            ).join(', ');
+            selectPart += `, ${joinCols}`;
+        }
+
+        let sql = `SELECT ${selectPart} FROM ${this.state.quotedTableName}`;
+
+        for (const { relation, relatedState } of mtoRelations) {
+            const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
+            sql += ` LEFT JOIN ${relatedState.quotedTableName} ON ${this.state.quotedTableName}."${relation.foreignKey}" = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName}`;
+        }
+
         sql += this.buildWhereSql(options.where, params);
 
         if (options.orderBy) {
@@ -151,22 +242,50 @@ export class Repository<T> {
                     return column ? `${column.quotedDatabaseName} ${direction}` : null;
                 })
                 .filter((clause): clause is string => clause !== null);
-
-            if (orderClauses.length > 0) {
-                sql += ` ORDER BY ${orderClauses.join(', ')}`;
-            }
+            if (orderClauses.length > 0) sql += ` ORDER BY ${orderClauses.join(', ')}`;
         }
 
-        if (options.limit !== undefined) {
-            sql += ` LIMIT ${options.limit}`;
-        }
-        if (options.offset !== undefined) {
-            sql += ` OFFSET ${options.offset}`;
-        }
+        if (options.limit !== undefined) sql += ` LIMIT ${options.limit}`;
+        if (options.offset !== undefined) sql += ` OFFSET ${options.offset}`;
 
         try {
             const rows = await this.runner.query<Record<string, unknown>>(sql, params);
-            return rows.map(this.state.hydrator);
+
+            const entities = rows.map(row => {
+                const entity = this.state.hydrator(row) as Record<string, unknown>;
+                for (const mto of mtoRelations) {
+                    const pkRowKey = `${mto.prefix}${mto.pkDbName}`;
+                    entity[mto.relation.propertyKey] = row[pkRowKey] !== null && row[pkRowKey] !== undefined
+                        ? mto.prefixedHydrator(row)
+                        : null;
+                }
+                return entity as T;
+            });
+
+            if (otmRelations.length > 0) {
+                const mainPk = this.state.cachedPrimaryColumn!;
+                const mainPkDbName = mainPk.databaseName;
+                const mainIds = rows.map(row => row[mainPkDbName]);
+
+                for (const { relation, relatedState } of otmRelations) {
+                    const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+                    const relRows = await this.runner.query<Record<string, unknown>>(fkSql, [mainIds]);
+
+                    const grouped = new Map<unknown, Array<unknown>>();
+                    for (const relRow of relRows) {
+                        const fkVal = relRow[relation.foreignKey];
+                        if (!grouped.has(fkVal)) grouped.set(fkVal, []);
+                        grouped.get(fkVal)!.push(relatedState.hydrator(relRow));
+                    }
+
+                    for (let i = 0; i < entities.length; i++) {
+                        const pkVal = rows[i][mainPkDbName];
+                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? [];
+                    }
+                }
+            }
+
+            return entities;
         } catch (error) {
             throw new QueryError(sql, error);
         }

@@ -5,12 +5,14 @@ import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Like } from '../operators';
 import { Repository } from '../repository/repository';
-import { AccountFixture, PostFixture, UserFixture } from './fixtures/user.entity';
+import { AccountFixture, AuthorFixture, BookFixture, PostFixture, UserFixture } from './fixtures/user.entity';
 
 // force decorator registration
 void UserFixture;
 void PostFixture;
 void AccountFixture;
+void AuthorFixture;
+void BookFixture;
 
 describe('Repository<UserFixture> (identity PK)', () => {
     let mockQuery: Mock;
@@ -431,6 +433,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             tableName: 'orphans',
             className: 'Orphan',
             columns: [{ propertyKey: 'name', databaseName: 'name', options: {}, primary: false }],
+            relations: [],
         };
 
         it('throws NoPrimaryColumnError on findById', async () => {
@@ -598,6 +601,7 @@ describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
             { propertyKey: 'id',  databaseName: 'id',  options: {},                 primary: true  },
             { propertyKey: 'seq', databaseName: 'seq', options: { type: 'bigint' }, primary: false },
         ],
+        relations: [],
     };
 
     class Sequence { id!: number; seq!: bigint; }
@@ -658,6 +662,7 @@ describe("type: 'iso' — TIMESTAMP → UTC ISO string", () => {
             { propertyKey: 'id',         databaseName: 'id',          options: {},                primary: true  },
             { propertyKey: 'occurredAt', databaseName: 'occurred_at', options: { type: 'iso' },   primary: false },
         ],
+        relations: [],
     };
     class Event { id!: number; occurredAt!: string; }
 
@@ -704,6 +709,7 @@ describe("type: 'date' — DATE → YYYY-MM-DD string (no time, no timezone shif
             { propertyKey: 'id',        databaseName: 'id',         options: {},               primary: true  },
             { propertyKey: 'birthDate', databaseName: 'birth_date', options: { type: 'date' }, primary: false },
         ],
+        relations: [],
     };
     class Profile { id!: number; birthDate!: string; }
 
@@ -817,5 +823,119 @@ describe('findOneOrFail', () => {
         mockQuery.mockResolvedValueOnce([]);
 
         await expect(repo.findOneOrFail()).rejects.toThrow('UserFixture');
+    });
+});
+
+// ─── @ManyToOne — LEFT JOIN ───────────────────────────────────────────────────
+
+describe('@ManyToOne — find({ relations })', () => {
+    let mockQuery: Mock;
+    let repo: Repository<BookFixture>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(BookFixture, { query: mockQuery }, registry.getEntity('BookFixture')!);
+    });
+
+    it('builds LEFT JOIN SQL and selects prefixed relation columns', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+        await repo.find({ relations: ['author'] });
+
+        const [sql] = mockQuery.mock.calls[0];
+        expect(sql).toContain('LEFT JOIN "authors"');
+        expect(sql).toContain('"books"."author_id" = "authors"."id"');
+        expect(sql).toContain('"mirror__author__id"');
+        expect(sql).toContain('"mirror__author__name"');
+    });
+
+    it('hydrates the related AuthorFixture and attaches it to book.author', async () => {
+        mockQuery.mockResolvedValueOnce([{
+            id: 1, title: 'Clean Code', author_id: 10,
+            'mirror__author__id': 10, 'mirror__author__name': 'Robert Martin',
+        }]);
+
+        const [book] = await repo.find({ relations: ['author'] });
+
+        expect(book).toBeInstanceOf(BookFixture);
+        expect(book.author).toBeInstanceOf(AuthorFixture);
+        expect(book.author.id).toBe(10);
+        expect(book.author.name).toBe('Robert Martin');
+    });
+
+    it('sets author to null when LEFT JOIN has no match (FK is null)', async () => {
+        mockQuery.mockResolvedValueOnce([{
+            id: 2, title: 'Orphan Book', author_id: null,
+            'mirror__author__id': null, 'mirror__author__name': null,
+        }]);
+
+        const [book] = await repo.find({ relations: ['author'] });
+
+        expect(book.author).toBeNull();
+    });
+
+    it('still supports WHERE + LIMIT combined with relations', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+        await repo.find({ relations: ['author'], where: { title: 'X' }, limit: 5 });
+
+        const [sql] = mockQuery.mock.calls[0];
+        expect(sql).toContain('WHERE');
+        expect(sql).toContain('LIMIT 5');
+        expect(sql).toContain('LEFT JOIN');
+    });
+});
+
+// ─── @OneToMany — batch query ────────────────────────────────────────────────
+
+describe('@OneToMany — find({ relations })', () => {
+    let mockQuery: Mock;
+    let repo: Repository<AuthorFixture>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(AuthorFixture, { query: mockQuery }, registry.getEntity('AuthorFixture')!);
+    });
+
+    it('executes main query then a batch query with ANY($1)', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 1, name: 'Robert Martin' }, { id: 2, name: 'Martin Fowler' }])
+            .mockResolvedValueOnce([
+                { id: 10, title: 'Clean Code',   author_id: 1 },
+                { id: 11, title: 'Refactoring',  author_id: 2 },
+            ]);
+
+        await repo.find({ relations: ['books'] });
+
+        expect(mockQuery).toHaveBeenCalledTimes(2);
+        const [secondSql, secondParams] = mockQuery.mock.calls[1];
+        expect(secondSql).toContain('WHERE "author_id" = ANY($1)');
+        expect(secondParams).toEqual([[1, 2]]);
+    });
+
+    it('groups books by author and attaches them correctly', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 1, name: 'Robert Martin' }, { id: 2, name: 'Martin Fowler' }])
+            .mockResolvedValueOnce([
+                { id: 10, title: 'Clean Code',       author_id: 1 },
+                { id: 12, title: 'Clean Architecture', author_id: 1 },
+                { id: 11, title: 'Refactoring',       author_id: 2 },
+            ]);
+
+        const authors = await repo.find({ relations: ['books'] });
+
+        expect(authors[0].books).toHaveLength(2);
+        expect(authors[0].books[0]).toBeInstanceOf(BookFixture);
+        expect(authors[0].books[0].title).toBe('Clean Code');
+        expect(authors[1].books).toHaveLength(1);
+        expect(authors[1].books[0].title).toBe('Refactoring');
+    });
+
+    it('sets books to empty array when author has no books', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 99, name: 'New Author' }])
+            .mockResolvedValueOnce([]);
+
+        const [author] = await repo.find({ relations: ['books'] });
+
+        expect(author.books).toEqual([]);
     });
 });

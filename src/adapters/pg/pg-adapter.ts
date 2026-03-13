@@ -1,14 +1,17 @@
 import { Pool, PoolClient } from 'pg';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
+import { INamedQuery } from '../../interfaces/query-runner';
 import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
 
 class PgTransactionRunner implements ITransactionRunner {
     constructor(private readonly client: PoolClient) {}
 
-    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
-        const result = await this.client.query(sql, params);
+    public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+        const result = typeof input === 'string'
+            ? await this.client.query(input, params)
+            : await this.client.query(input);
         return result.rows as Array<T>;
     }
 
@@ -42,13 +45,16 @@ export class PgAdapter implements IDriverAdapter {
         );
     }
 
-    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
+    public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
         if (!this.pool) throw new Error('Not connected');
+        const sqlText = typeof input === 'string' ? input : input.text;
         try {
-            const result = await this.pool.query(sql, params);
+            const result = typeof input === 'string'
+                ? await this.pool.query(input, params)
+                : await this.pool.query(input);
             return result.rows as Array<T>;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sqlText, error);
         }
     }
 

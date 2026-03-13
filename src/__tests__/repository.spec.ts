@@ -27,12 +27,12 @@ describe('Repository<UserFixture> (identity PK)', () => {
     // ─── findAll ────────────────────────────────────────────────────────────
 
     describe('findAll', () => {
-        it('executes SELECT * and hydrates results', async () => {
+        it('executes SELECT with explicit columns and hydrates results', async () => {
             mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: 'e@test.com' }]);
 
             const result = await repo.findAll();
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users"');
+            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_users_fa', text: 'SELECT "id", "name", "email" FROM "users"' });
             expect(result).toHaveLength(1);
             expect(result[0]).toBeInstanceOf(UserFixture);
             expect(result[0].id).toBe(1);
@@ -58,7 +58,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.findById(1);
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users" WHERE "id" = $1', [1]);
+            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_users_fbi', text: 'SELECT "id", "name", "email" FROM "users" WHERE "id" = $1', values: [1] });
             expect(result).toBeInstanceOf(UserFixture);
             expect(result!.id).toBe(1);
         });
@@ -77,17 +77,17 @@ describe('Repository<UserFixture> (identity PK)', () => {
     // ─── find ────────────────────────────────────────────────────────────────
 
     describe('find', () => {
-        it('executes SELECT * with no WHERE when called with empty options', async () => {
+        it('executes SELECT with explicit columns and no WHERE when called with empty options', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find();
-            expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM "users"', []);
+            expect(mockQuery).toHaveBeenCalledWith('SELECT "id", "name", "email" FROM "users"', []);
         });
 
         it('builds WHERE clause for simple equality', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: { name: 'Emanuel' } });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM "users" WHERE "name" = $1',
+                'SELECT "id", "name", "email" FROM "users" WHERE "name" = $1',
                 ['Emanuel'],
             );
         });
@@ -96,7 +96,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: { name: Like('%manu%') } });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM "users" WHERE "name" LIKE $1',
+                'SELECT "id", "name", "email" FROM "users" WHERE "name" LIKE $1',
                 ['%manu%'],
             );
         });
@@ -114,7 +114,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find({ where: [{ name: 'A' }, { name: 'B' }] });
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT * FROM "users" WHERE "name" = $1 OR "name" = $2',
+                'SELECT "id", "name", "email" FROM "users" WHERE "name" = $1 OR "name" = $2',
                 ['A', 'B'],
             );
         });

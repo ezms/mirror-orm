@@ -1,4 +1,4 @@
-import { IQueryRunner } from '../interfaces/query-runner';
+import { INamedQuery, IQueryRunner } from '../interfaces/query-runner';
 import { ITransactionRunner } from '../interfaces/transaction-runner';
 import { ILogger } from './logger.interface';
 
@@ -8,9 +8,11 @@ export class LoggingQueryRunner implements IQueryRunner {
         protected readonly logger: ILogger,
     ) {}
 
-    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
-        this.logger.query(sql, params);
-        return this.runner.query<T>(sql, params);
+    public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+        const sql = typeof input === 'string' ? input : input.text;
+        const values = typeof input === 'string' ? params : input.values;
+        this.logger.query(sql, values);
+        return this.runner.query<T>(input, params);
     }
 }
 

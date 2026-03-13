@@ -3,15 +3,18 @@ import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
-import { IQueryRunner } from '../interfaces/query-runner';
+import { INamedQuery, IQueryRunner } from '../interfaces/query-runner';
 import { isOperator } from '../operators/query-operator';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 
 export class Repository<T> {
     private readonly cachedPrimaryColumn: IColumnMetadata | null;
     private readonly quotedTableName: string;
+    private readonly selectClause: string;
     private readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
     private readonly hydrator: (row: Record<string, unknown>) => T;
+    private readonly findAllStatement: INamedQuery;
+    private readonly findByIdStatement: INamedQuery | null;
 
     constructor(
         private readonly target: new () => T,
@@ -20,8 +23,11 @@ export class Repository<T> {
     ) {
         this.quotedTableName = this.quoteIdentifier(metadata.tableName);
         this.columnMap = this.buildColumnMap();
+        this.selectClause = this.buildSelectClause();
         this.cachedPrimaryColumn = this.resolvePrimaryColumn();
         this.hydrator = this.buildHydrator();
+        this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}` };
+        this.findByIdStatement = this.buildFindByIdStatement();
     }
 
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
@@ -33,8 +39,21 @@ export class Repository<T> {
         );
     }
 
+    private buildSelectClause(): string {
+        return [...this.columnMap.values()].map(c => c.quotedDatabaseName).join(', ');
+    }
+
     private resolvePrimaryColumn(): IColumnMetadata | null {
         return this.metadata.columns.find(c => c.primary) ?? null;
+    }
+
+    private buildFindByIdStatement(): INamedQuery | null {
+        if (!this.cachedPrimaryColumn) return null;
+        const pk = this.columnMap.get(this.cachedPrimaryColumn.propertyKey)!;
+        return {
+            name: `mirror_${this.metadata.tableName}_fbi`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`,
+        };
     }
 
     private buildHydrator(): (row: Record<string, unknown>) => T {
@@ -50,28 +69,27 @@ export class Repository<T> {
     }
 
     public async findAll(): Promise<Array<T>> {
-        const sql = `SELECT * FROM ${this.quotedTableName}`;
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(sql);
+            const rows = await this.runner.query<Record<string, unknown>>(this.findAllStatement);
             return rows.map(this.hydrator);
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(this.findAllStatement.text, error);
         }
     }
 
     public async findById(id: number | string): Promise<T | null> {
-        const pk = this.primaryColumn();
-        const sql = `SELECT * FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
+        const stmt = this.findByIdStatement;
+        if (!stmt) throw new NoPrimaryColumnError(this.metadata.className);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(sql, [id]);
+            const rows = await this.runner.query<Record<string, unknown>>({ ...stmt, values: [id] });
             return rows.length > 0 ? this.hydrator(rows[0]) : null;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(stmt.text, error);
         }
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        let sql = `SELECT * FROM ${this.quotedTableName}`;
+        let sql = `SELECT ${this.selectClause} FROM ${this.quotedTableName}`;
         const params: Array<unknown> = [];
 
         if (options.where) {

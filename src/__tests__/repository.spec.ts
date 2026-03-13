@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
+import { EntityNotFoundError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
@@ -187,6 +187,25 @@ describe('Repository<UserFixture> (identity PK)', () => {
         });
     });
 
+    // ─── exists ──────────────────────────────────────────────────────────────
+
+    describe('exists', () => {
+        it('returns true when count is greater than zero', async () => {
+            mockQuery.mockResolvedValueOnce([{ count: '1' }]);
+            expect(await repo.exists({ name: 'Emanuel' })).toBe(true);
+        });
+
+        it('returns false when count is zero', async () => {
+            mockQuery.mockResolvedValueOnce([{ count: '0' }]);
+            expect(await repo.exists({ name: 'Ghost' })).toBe(false);
+        });
+
+        it('works without where (checks if table has any rows)', async () => {
+            mockQuery.mockResolvedValueOnce([{ count: '10' }]);
+            expect(await repo.exists()).toBe(true);
+        });
+    });
+
     // ─── save (insert) ───────────────────────────────────────────────────────
 
     describe('save → insert (identity PK)', () => {
@@ -260,6 +279,148 @@ describe('Repository<UserFixture> (identity PK)', () => {
             const user = new UserFixture();
             user.id = 1;
             await expect(repo.remove(user)).rejects.toThrow(QueryError);
+        });
+    });
+
+    // ─── saveMany ────────────────────────────────────────────────────────────
+
+    describe('saveMany', () => {
+        it('inserts multiple rows in a single query', async () => {
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, name: 'Alice', email: 'a@test.com' },
+                { id: 2, name: 'Bob',   email: 'b@test.com' },
+            ]);
+
+            const a = new UserFixture(); a.name = 'Alice'; a.email = 'a@test.com';
+            const b = new UserFixture(); b.name = 'Bob';   b.email = 'b@test.com';
+            const result = await repo.saveMany([a, b]);
+
+            const [sql, params] = mockQuery.mock.calls[0];
+            expect(sql).toMatch(/^INSERT INTO "users"/);
+            expect(sql).toContain('VALUES');
+            expect(sql).toContain('($1, $2)');
+            expect(sql).toContain('($3, $4)');
+            expect(sql).toContain('RETURNING *');
+            expect(params).toEqual(['Alice', 'a@test.com', 'Bob', 'b@test.com']);
+            expect(result).toHaveLength(2);
+            expect(result[0]).toBeInstanceOf(UserFixture);
+        });
+
+        it('returns empty array without querying when given empty array', async () => {
+            const result = await repo.saveMany([]);
+            expect(mockQuery).not.toHaveBeenCalled();
+            expect(result).toEqual([]);
+        });
+
+        it('wraps database errors in QueryError', async () => {
+            mockQuery.mockRejectedValueOnce(new Error('constraint violation'));
+            const u = new UserFixture(); u.name = 'X'; u.email = 'x@test.com';
+            await expect(repo.saveMany([u])).rejects.toThrow(QueryError);
+        });
+    });
+
+    // ─── removeMany ──────────────────────────────────────────────────────────
+
+    describe('removeMany', () => {
+        it('deletes multiple rows using ANY($1)', async () => {
+            mockQuery.mockResolvedValueOnce([]);
+
+            const a = new UserFixture(); a.id = 1;
+            const b = new UserFixture(); b.id = 2;
+            await repo.removeMany([a, b]);
+
+            expect(mockQuery).toHaveBeenCalledWith(
+                'DELETE FROM "users" WHERE "id" = ANY($1)',
+                [[1, 2]],
+            );
+        });
+
+        it('returns without querying when given empty array', async () => {
+            await repo.removeMany([]);
+            expect(mockQuery).not.toHaveBeenCalled();
+        });
+
+        it('throws MissingPrimaryKeyError when any entity lacks a pk value', async () => {
+            const a = new UserFixture(); a.id = 1;
+            const b = new UserFixture(); // sem id
+            await expect(repo.removeMany([a, b])).rejects.toThrow(MissingPrimaryKeyError);
+        });
+
+        it('wraps database errors in QueryError', async () => {
+            mockQuery.mockRejectedValueOnce(new Error('db error'));
+            const u = new UserFixture(); u.id = 1;
+            await expect(repo.removeMany([u])).rejects.toThrow(QueryError);
+        });
+    });
+
+    // ─── update (sem carregar entidade) ──────────────────────────────────────
+
+    describe('update', () => {
+        it('builds UPDATE SET ... WHERE ... RETURNING 1', async () => {
+            mockQuery.mockResolvedValueOnce([{ '?column?': 1 }]);
+
+            const affected = await repo.update({ name: 'Bob' }, { id: 1 });
+
+            const [sql, params] = mockQuery.mock.calls[0];
+            expect(sql).toBe('UPDATE "users" SET "name" = $1 WHERE "id" = $2 RETURNING 1');
+            expect(params).toEqual(['Bob', 1]);
+            expect(affected).toBe(1);
+        });
+
+        it('returns the count of affected rows', async () => {
+            mockQuery.mockResolvedValueOnce([{}, {}]);
+            const affected = await repo.update({ email: 'x@test.com' }, { name: 'Alice' });
+            expect(affected).toBe(2);
+        });
+
+        it('supports no WHERE clause (full-table update)', async () => {
+            mockQuery.mockResolvedValueOnce([{}, {}, {}]);
+            const affected = await repo.update({ name: 'Everyone' }, undefined);
+            const [sql] = mockQuery.mock.calls[0];
+            expect(sql).not.toContain('WHERE');
+            expect(affected).toBe(3);
+        });
+
+        it('throws QueryError when no updatable columns are provided', async () => {
+            await expect(repo.update({}, { id: 1 })).rejects.toThrow(QueryError);
+        });
+
+        it('wraps database errors in QueryError', async () => {
+            mockQuery.mockRejectedValueOnce(new Error('constraint'));
+            await expect(repo.update({ name: 'X' }, { id: 1 })).rejects.toThrow(QueryError);
+        });
+    });
+
+    // ─── delete (sem carregar entidade) ──────────────────────────────────────
+
+    describe('delete', () => {
+        it('builds DELETE FROM ... WHERE ... RETURNING 1', async () => {
+            mockQuery.mockResolvedValueOnce([{ '?column?': 1 }]);
+
+            const affected = await repo.delete({ id: 1 });
+
+            const [sql, params] = mockQuery.mock.calls[0];
+            expect(sql).toBe('DELETE FROM "users" WHERE "id" = $1 RETURNING 1');
+            expect(params).toEqual([1]);
+            expect(affected).toBe(1);
+        });
+
+        it('returns 0 when no rows matched', async () => {
+            mockQuery.mockResolvedValueOnce([]);
+            expect(await repo.delete({ id: 999 })).toBe(0);
+        });
+
+        it('supports no WHERE clause (full-table delete)', async () => {
+            mockQuery.mockResolvedValueOnce([{}, {}]);
+            const affected = await repo.delete(undefined);
+            const [sql] = mockQuery.mock.calls[0];
+            expect(sql).toBe('DELETE FROM "users" RETURNING 1');
+            expect(affected).toBe(2);
+        });
+
+        it('wraps database errors in QueryError', async () => {
+            mockQuery.mockRejectedValueOnce(new Error('fk violation'));
+            await expect(repo.delete({ id: 1 })).rejects.toThrow(QueryError);
         });
     });
 
@@ -571,5 +732,90 @@ describe("type: 'date' — DATE → YYYY-MM-DD string (no time, no timezone shif
         const result = await repo.findAll();
 
         expect(result[0].birthDate).toBeNull();
+    });
+});
+
+// ─── findOne / findOneOrFail ─────────────────────────────────────────────────
+
+describe('findOne', () => {
+    let mockQuery: Mock;
+    let runner: IQueryRunner;
+    let repo: Repository<UserFixture>;
+    let metadata: IEntityMetadata;
+
+    beforeEach(() => {
+        metadata = registry.getEntity('UserFixture')!;
+        mockQuery = vi.fn();
+        runner = { query: mockQuery };
+        repo = new Repository(UserFixture, runner, metadata);
+    });
+
+    it('returns the first entity when a match exists', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: 'e@test.com' }]);
+
+        const result = await repo.findOne({ where: { name: 'Emanuel' } });
+
+        expect(result).toBeInstanceOf(UserFixture);
+        expect(result?.id).toBe(1);
+    });
+
+    it('appends LIMIT 1 to the query', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: null }]);
+
+        await repo.findOne({ where: { name: 'Emanuel' } });
+
+        const sql: string = mockQuery.mock.calls[0][0];
+        expect(sql).toMatch(/LIMIT 1$/);
+    });
+
+    it('returns null when no row matches', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        const result = await repo.findOne({ where: { name: 'Ghost' } });
+
+        expect(result).toBeNull();
+    });
+
+    it('works without options (no WHERE clause)', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: null }]);
+
+        const result = await repo.findOne();
+
+        expect(result).toBeInstanceOf(UserFixture);
+    });
+});
+
+describe('findOneOrFail', () => {
+    let mockQuery: Mock;
+    let runner: IQueryRunner;
+    let repo: Repository<UserFixture>;
+    let metadata: IEntityMetadata;
+
+    beforeEach(() => {
+        metadata = registry.getEntity('UserFixture')!;
+        mockQuery = vi.fn();
+        runner = { query: mockQuery };
+        repo = new Repository(UserFixture, runner, metadata);
+    });
+
+    it('returns the entity when found', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 2, name: 'Alice', email: 'alice@test.com' }]);
+
+        const result = await repo.findOneOrFail({ where: { name: 'Alice' } });
+
+        expect(result).toBeInstanceOf(UserFixture);
+        expect(result.id).toBe(2);
+    });
+
+    it('throws EntityNotFoundError when no row matches', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        await expect(repo.findOneOrFail({ where: { name: 'Ghost' } })).rejects.toThrow(EntityNotFoundError);
+    });
+
+    it('error message includes the entity class name', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        await expect(repo.findOneOrFail()).rejects.toThrow('UserFixture');
     });
 });

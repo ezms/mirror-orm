@@ -1,4 +1,4 @@
-import { GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
+import { EntityNotFoundError, GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
@@ -142,18 +142,7 @@ export class Repository<T> {
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         let sql = `SELECT ${this.state.selectClause} FROM ${this.state.quotedTableName}`;
         const params: Array<unknown> = [];
-
-        if (options.where) {
-            const groups = Array.isArray(options.where) ? options.where : [options.where];
-            const whereClauses = groups
-                .map(condition => this.buildWhereGroup(condition as Record<string, unknown>, params))
-                .filter(group => group.length > 0)
-                .map(group => group.length > 1 ? `(${group.join(' AND ')})` : group[0]);
-
-            if (whereClauses.length > 0) {
-                sql += ` WHERE ${whereClauses.join(' OR ')}`;
-            }
-        }
+        sql += this.buildWhereSql(options.where, params);
 
         if (options.orderBy) {
             const orderClauses = Object.entries(options.orderBy)
@@ -183,25 +172,81 @@ export class Repository<T> {
         }
     }
 
+    public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {
+        const rows = await this.find({ ...options, limit: 1 });
+        return rows.length > 0 ? rows[0] : null;
+    }
+
+    public async findOneOrFail(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T> {
+        const entity = await this.findOne(options);
+        if (entity === null) throw new EntityNotFoundError(this.state.metadata.className);
+        return entity;
+    }
+
+    public async exists(where?: IFindOptions<T>['where']): Promise<boolean> {
+        return (await this.count(where)) > 0;
+    }
+
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
-        let sql = `SELECT COUNT(*) FROM ${this.state.quotedTableName}`;
         const params: Array<unknown> = [];
-
-        if (where) {
-            const groups = Array.isArray(where) ? where : [where];
-            const whereClauses = groups
-                .map(condition => this.buildWhereGroup(condition as Record<string, unknown>, params))
-                .filter(group => group.length > 0)
-                .map(group => group.length > 1 ? `(${group.join(' AND ')})` : group[0]);
-
-            if (whereClauses.length > 0) {
-                sql += ` WHERE ${whereClauses.join(' OR ')}`;
-            }
-        }
+        const sql = `SELECT COUNT(*) FROM ${this.state.quotedTableName}${this.buildWhereSql(where, params)}`;
 
         try {
             const rows = await this.runner.query<{ count: string }>(sql, params);
             return parseInt(rows[0].count, 10);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
+    }
+
+    public async saveMany(entities: Array<T>): Promise<Array<T>> {
+        if (entities.length === 0) return [];
+        const pk = this.primaryColumn();
+        const isIdentity = pk.generation?.strategy === 'identity';
+        const records = entities.map(e => ({ ...(e as Record<string, unknown>) }));
+
+        if (!isIdentity && pk.generation) {
+            for (const record of records) {
+                if (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null) {
+                    record[pk.propertyKey] = this.generatePk(pk.generation);
+                }
+            }
+        }
+
+        const columns = this.state.metadata.columns.filter(
+            c => (!c.primary || !isIdentity) && records[0][c.propertyKey] !== undefined,
+        );
+        const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
+        const allValues: Array<unknown> = [];
+        const rowPlaceholders = records.map(record => {
+            const placeholders = columns.map(c => {
+                allValues.push(record[c.propertyKey]);
+                return `$${allValues.length}`;
+            });
+            return `(${placeholders.join(', ')})`;
+        });
+
+        const sql = `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES ${rowPlaceholders.join(', ')} RETURNING *`;
+        try {
+            const rows = await this.runner.query<Record<string, unknown>>(sql, allValues);
+            return rows.map(this.state.hydrator);
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
+    }
+
+    public async removeMany(entities: Array<T>): Promise<void> {
+        if (entities.length === 0) return;
+        const pk = this.primaryColumn();
+        const ids = entities.map(e => (e as Record<string, unknown>)[pk.propertyKey]);
+
+        if (ids.some(id => id === undefined || id === null)) {
+            throw new MissingPrimaryKeyError(this.state.metadata.className, 'removeMany');
+        }
+
+        const sql = `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY($1)`;
+        try {
+            await this.runner.query(sql, [ids]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
@@ -214,7 +259,7 @@ export class Repository<T> {
 
         return typeof pkValue === 'undefined' || pkValue === null
             ? this.insert(record, pk)
-            : this.update(record, pk, pkValue);
+            : this.updateById(record, pk, pkValue);
     }
 
     public async remove(entity: T): Promise<void> {
@@ -254,7 +299,38 @@ export class Repository<T> {
         }
     }
 
-    private async update(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
+    public async update(data: Partial<T>, where: IFindOptions<T>['where']): Promise<number> {
+        const record = data as Record<string, unknown>;
+        const params: Array<unknown> = [];
+        const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
+        if (columns.length === 0) throw new QueryError('UPDATE', new Error('No updatable columns provided'));
+
+        const setClauses = columns.map(c => {
+            params.push(record[c.propertyKey]);
+            return `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${params.length}`;
+        });
+
+        const sql = `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')}${this.buildWhereSql(where, params)} RETURNING 1`;
+        try {
+            const rows = await this.runner.query(sql, params);
+            return rows.length;
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
+    }
+
+    public async delete(where: IFindOptions<T>['where']): Promise<number> {
+        const params: Array<unknown> = [];
+        const sql = `DELETE FROM ${this.state.quotedTableName}${this.buildWhereSql(where, params)} RETURNING 1`;
+        try {
+            const rows = await this.runner.query(sql, params);
+            return rows.length;
+        } catch (error) {
+            throw new QueryError(sql, error);
+        }
+    }
+
+    private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
         const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
         const values = columns.map(c => record[c.propertyKey]);
@@ -285,6 +361,16 @@ export class Repository<T> {
             case 'identity':
                 throw new GenerationStrategyError('identity strategy is managed by the database and cannot generate a value');
         }
+    }
+
+    private buildWhereSql(where: IFindOptions<T>['where'], params: Array<unknown>): string {
+        if (!where) return '';
+        const groups = Array.isArray(where) ? where : [where];
+        const clauses = groups
+            .map(condition => this.buildWhereGroup(condition as Record<string, unknown>, params))
+            .filter(group => group.length > 0)
+            .map(group => group.length > 1 ? `(${group.join(' AND ')})` : group[0]);
+        return clauses.length > 0 ? ` WHERE ${clauses.join(' OR ')}` : '';
     }
 
     private buildWhereGroup(condition: Record<string, unknown>, params: Array<unknown>): Array<string> {

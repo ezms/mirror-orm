@@ -14,3 +14,9 @@ export class GenerationStrategyError extends MirrorError {
         super(message, 'GENERATION_STRATEGY_ERROR');
     }
 }
+
+export class EntityNotFoundError extends MirrorError {
+    constructor(className: string) {
+        super(`Entity "${className}" not found.`, 'ENTITY_NOT_FOUND');
+    }
+}

@@ -41,7 +41,7 @@ export type { ILogger } from './logger/logger.interface';
 // ─── Errors ───────────────────────────────────────────────────────────────────
 export { MirrorError } from './errors/mirror-error';
 export { NoPrimaryColumnError } from './errors/metadata.error';
-export { MissingPrimaryKeyError, GenerationStrategyError } from './errors/operation.error';
+export { MissingPrimaryKeyError, GenerationStrategyError, EntityNotFoundError } from './errors/operation.error';
 export { QueryError } from './errors/query.error';
 
 // ─── Types & Interfaces ───────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { QueryError } from '../errors';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IFindOptions } from '../interfaces/find-options';
-import { IRelationMetadata } from '../interfaces/relation-metadata';
+import { IRelationMetadata, RelationType } from '../interfaces/relation-metadata';
 import { isOperator } from '../operators/query-operator';
 import { RepositoryState } from './repository-state';
 
@@ -36,44 +36,26 @@ export class SqlAssembler<T> {
     constructor(private readonly state: RepositoryState<T>) {}
 
     public buildFind(options: IFindOptions<T>): FindPlan<T> {
-        const requestedRelations = options.relations ?? [];
         const mtoRelations: Array<ManyToOneInfo> = [];
         const otmRelations: Array<OtmInfo> = [];
         const otoInverseRelations: Array<OtmInfo> = [];
         const mtmRelations: Array<MtmInfo> = [];
 
-        for (const relName of requestedRelations) {
+        const classifyRelation: Record<RelationType, (relation: IRelationMetadata, relatedState: RepositoryState<unknown>) => void> = {
+            'many-to-one':  (relation, relatedState) => mtoRelations.push(this.buildMtoInfo(relation, relatedState)),
+            'one-to-many':  (relation, relatedState) => otmRelations.push({ relation, relatedState }),
+            'many-to-many': (relation, relatedState) => mtmRelations.push({ relation, relatedState }),
+            'one-to-one':   (relation, relatedState) => {
+                const isOwner = this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey);
+                if (isOwner) mtoRelations.push(this.buildMtoInfo(relation, relatedState));
+                else otoInverseRelations.push({ relation, relatedState });
+            },
+        };
+
+        for (const relName of options.relations ?? []) {
             const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
             if (!relation) continue;
-            const relatedState = this.state.getRelatedState(relation);
-            if (relation.type === 'many-to-one') {
-                const prefix = `mirror__${relation.propertyKey}__`;
-                mtoRelations.push({
-                    relation,
-                    relatedState,
-                    prefix,
-                    prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
-                    pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
-                });
-            } else if (relation.type === 'one-to-one') {
-                const isOwner = this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey);
-                if (isOwner) {
-                    const prefix = `mirror__${relation.propertyKey}__`;
-                    mtoRelations.push({
-                        relation,
-                        relatedState,
-                        prefix,
-                        prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
-                        pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
-                    });
-                } else {
-                    otoInverseRelations.push({ relation, relatedState });
-                }
-            } else if (relation.type === 'many-to-many') {
-                mtmRelations.push({ relation, relatedState });
-            } else {
-                otmRelations.push({ relation, relatedState });
-            }
+            classifyRelation[relation.type](relation, this.state.getRelatedState(relation));
         }
 
         const params: Array<unknown> = [];
@@ -189,6 +171,17 @@ export class SqlAssembler<T> {
 
     public buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
         return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY($1)`;
+    }
+
+    private buildMtoInfo(relation: IRelationMetadata, relatedState: RepositoryState<unknown>): ManyToOneInfo {
+        const prefix = `mirror__${relation.propertyKey}__`;
+        return {
+            relation,
+            relatedState,
+            prefix,
+            prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
+            pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
+        };
     }
 
     private buildWhere(where: IFindOptions<T>['where'], params: Array<unknown>): string {

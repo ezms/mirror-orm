@@ -6,6 +6,7 @@ export { Entity } from './decorators/entity';
 export { Column } from './decorators/column';
 export { PrimaryColumn } from './decorators/primary-column';
 export { ManyToOne } from './decorators/many-to-one';
+export { ManyToMany } from './decorators/many-to-many';
 export { OneToMany } from './decorators/one-to-many';
 export { OneToOne } from './decorators/one-to-one';
 

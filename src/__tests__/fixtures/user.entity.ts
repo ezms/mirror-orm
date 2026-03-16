@@ -1,5 +1,6 @@
 import { Column } from '../../decorators/column';
 import { Entity } from '../../decorators/entity';
+import { ManyToMany } from '../../decorators/many-to-many';
 import { ManyToOne } from '../../decorators/many-to-one';
 import { OneToMany } from '../../decorators/one-to-many';
 import { OneToOne } from '../../decorators/one-to-one';
@@ -132,4 +133,28 @@ export class RichBookFixture {
 
     @ManyToOne(() => CategoryFixture, 'category_id')
     category!: CategoryFixture;
+}
+
+@Entity('tags')
+export class TagFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    name!: string;
+
+    @ManyToMany(() => ArticleFixture, 'article_tags', 'tag_id', 'article_id')
+    articles!: ArticleFixture[];
+}
+
+@Entity('articles')
+export class ArticleFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    title!: string;
+
+    @ManyToMany(() => TagFixture, 'article_tags', 'article_id', 'tag_id')
+    tags!: TagFixture[];
 }

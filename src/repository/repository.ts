@@ -106,6 +106,26 @@ export class Repository<T> {
                         (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? null;
                     }
                 }
+
+                for (const { relation, relatedState } of plan.mtmRelations) {
+                    const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
+                    const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
+                    const ownerAlias = '_mirror_mtm_fk_';
+                    const mtmSql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY($1)`;
+                    const relRows = await this.runner.query<Record<string, unknown>>(mtmSql, [mainIds]);
+
+                    const grouped = new Map<unknown, Array<unknown>>();
+                    for (const relRow of relRows) {
+                        const ownerFkVal = relRow[ownerAlias];
+                        if (!grouped.has(ownerFkVal)) grouped.set(ownerFkVal, []);
+                        grouped.get(ownerFkVal)!.push(relatedState.hydrator(relRow));
+                    }
+
+                    for (let i = 0; i < entities.length; i++) {
+                        const pkVal = rows[i][mainPkDbName];
+                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? [];
+                    }
+                }
             }
 
             return entities;

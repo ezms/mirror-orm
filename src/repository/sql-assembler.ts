@@ -18,12 +18,18 @@ export type OtmInfo = {
     relatedState: RepositoryState<unknown>;
 };
 
+export type MtmInfo = {
+    relation: IRelationMetadata;
+    relatedState: RepositoryState<unknown>;
+};
+
 export type FindPlan<T> = {
     sql: string;
     params: Array<unknown>;
     mtoRelations: Array<ManyToOneInfo>;
     otmRelations: Array<OtmInfo>;
     otoInverseRelations: Array<OtmInfo>;
+    mtmRelations: Array<MtmInfo>;
 };
 
 export class SqlAssembler<T> {
@@ -34,6 +40,7 @@ export class SqlAssembler<T> {
         const mtoRelations: Array<ManyToOneInfo> = [];
         const otmRelations: Array<OtmInfo> = [];
         const otoInverseRelations: Array<OtmInfo> = [];
+        const mtmRelations: Array<MtmInfo> = [];
 
         for (const relName of requestedRelations) {
             const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
@@ -62,6 +69,8 @@ export class SqlAssembler<T> {
                 } else {
                     otoInverseRelations.push({ relation, relatedState });
                 }
+            } else if (relation.type === 'many-to-many') {
+                mtmRelations.push({ relation, relatedState });
             } else {
                 otmRelations.push({ relation, relatedState });
             }
@@ -101,7 +110,7 @@ export class SqlAssembler<T> {
         if (options.limit !== undefined) sql += ` LIMIT ${options.limit}`;
         if (options.offset !== undefined) sql += ` OFFSET ${options.offset}`;
 
-        return { sql, params, mtoRelations, otmRelations, otoInverseRelations };
+        return { sql, params, mtoRelations, otmRelations, otoInverseRelations, mtmRelations };
     }
 
     public buildCount(where?: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {

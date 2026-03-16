@@ -5,6 +5,7 @@ import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
+import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
 import { RepositoryState } from './repository-state';
 import { SqlAssembler } from './sql-assembler';
@@ -39,6 +40,15 @@ export class Repository<T> {
         return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.runner;
     }
 
+    private captureSnapshot(entity: T): T {
+        const snap: Record<string, unknown> = {};
+        for (const col of this.state.metadata.columns) {
+            snap[col.propertyKey] = (entity as Record<string, unknown>)[col.propertyKey];
+        }
+        entitySnapshots.set(entity as object, snap);
+        return entity;
+    }
+
     public withTransaction(runner: IQueryRunner): Repository<T> {
         return new Repository(this.state, runner, false);
     }
@@ -47,9 +57,9 @@ export class Repository<T> {
         const stmt = this.state.findAllStatement;
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(stmt);
-            return rows.map(this.state.hydrator);
+            return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
         } catch (error) {
-            throw new QueryError(stmt.text, error);
+            throw new QueryError(stmt.text, error, []);
         }
     }
 
@@ -58,9 +68,9 @@ export class Repository<T> {
         if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>({ ...stmt, values: [id] });
-            return rows.length > 0 ? this.state.hydrator(rows[0]) : null;
+            return rows.length > 0 ? this.captureSnapshot(this.state.hydrator(rows[0])) : null;
         } catch (error) {
-            throw new QueryError(stmt.text, error);
+            throw new QueryError(stmt.text, error, [id]);
         }
     }
 
@@ -70,7 +80,7 @@ export class Repository<T> {
             const rows = await this.activeRunner.query<Record<string, unknown>>(plan.sql, plan.params);
 
             const entities = rows.map(row => {
-                const entity = this.state.hydrator(row) as Record<string, unknown>;
+                const entity = this.captureSnapshot(this.state.hydrator(row)) as Record<string, unknown>;
                 for (const mto of plan.mtoRelations) {
                     const pkRowKey = `${mto.prefix}${mto.pkDbName}`;
                     entity[mto.relation.propertyKey] = row[pkRowKey] !== null && row[pkRowKey] !== undefined
@@ -140,7 +150,7 @@ export class Repository<T> {
 
             return entities;
         } catch (error) {
-            throw new QueryError(plan.sql, error);
+            throw new QueryError(plan.sql, error, plan.params);
         }
     }
 
@@ -165,7 +175,7 @@ export class Repository<T> {
             const rows = await this.activeRunner.query<{ count: string }>(sql, params);
             return parseInt(rows[0].count, 10);
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 
@@ -186,9 +196,9 @@ export class Repository<T> {
         const { sql, params } = this.assembler.buildBulkInsert(records, isIdentity);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return rows.map(this.state.hydrator);
+            return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 
@@ -205,7 +215,7 @@ export class Repository<T> {
         try {
             await this.activeRunner.query(sql, [ids]);
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, [ids]);
         }
     }
 
@@ -213,6 +223,17 @@ export class Repository<T> {
         const pk = this.primaryColumn();
         const record = entity as Record<string, unknown>;
         const pkValue = record[pk.propertyKey];
+
+        if (typeof pkValue !== 'undefined' && pkValue !== null) {
+            const snapshot = entitySnapshots.get(entity as object);
+            if (snapshot) {
+                const dirtyColumns = this.state.metadata.columns.filter(
+                    c => !c.primary && record[c.propertyKey] !== snapshot[c.propertyKey],
+                );
+                if (dirtyColumns.length === 0) return entity;
+                return this.updateById(record, pk, pkValue, dirtyColumns);
+            }
+        }
 
         return typeof pkValue === 'undefined' || pkValue === null
             ? this.insert(record, pk)
@@ -231,7 +252,7 @@ export class Repository<T> {
         try {
             await this.activeRunner.query(sql, [pkValue]);
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, [pkValue]);
         }
     }
 
@@ -241,7 +262,7 @@ export class Repository<T> {
             const rows = await this.activeRunner.query(sql, params);
             return rows.length;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 
@@ -251,7 +272,7 @@ export class Repository<T> {
             const rows = await this.activeRunner.query(sql, params);
             return rows.length;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 
@@ -263,19 +284,19 @@ export class Repository<T> {
         const { sql, params } = this.assembler.buildInsert(record, isIdentity);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return this.state.hydrator(rows[0]);
+            return this.captureSnapshot(this.state.hydrator(rows[0]));
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 
-    private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
-        const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue);
+    private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): Promise<T> {
+        const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return this.state.hydrator(rows[0]);
+            return this.captureSnapshot(this.state.hydrator(rows[0]));
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sql, error, params);
         }
     }
 

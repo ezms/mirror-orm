@@ -1,10 +1,11 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { EntityNotFoundError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Like } from '../operators';
 import { Repository, RepositoryState } from '../repository/repository';
+import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
 import { AccountFixture, AuthorFixture, BookFixture, PostFixture, UserFixture } from './fixtures/user.entity';
 
@@ -1041,5 +1042,125 @@ describe('AsyncLocalStorage — propagação implícita de transação', () => {
         expect(pinnedMock2).toHaveBeenCalledTimes(1);
         expect(txMock).not.toHaveBeenCalled();
         expect(defaultMock).not.toHaveBeenCalled();
+    });
+});
+
+// ─── Dirty checking ───────────────────────────────────────────────────────────
+
+describe('Dirty checking — save() com snapshot', () => {
+    let mockQuery: Mock;
+    let repo: Repository<UserFixture>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(UserFixture, { query: mockQuery }, registry.getEntity('UserFixture')!);
+    });
+
+    it('find() armazena snapshot na entidade retornada', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const [user] = await repo.find({});
+        expect(entitySnapshots.has(user as object)).toBe(true);
+    });
+
+    it('save() sem alterações não emite UPDATE', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const [user] = await repo.find({});
+
+        const result = await repo.save(user);
+
+        expect(mockQuery).toHaveBeenCalledTimes(1); // só o find, nenhum UPDATE
+        expect(result).toBe(user); // mesma referência
+    });
+
+    it('save() com campo alterado emite UPDATE apenas com a coluna suja', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const [user] = await repo.find({});
+
+        user.name = 'Alice Updated';
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice Updated', email: 'alice@test.com' }]);
+        await repo.save(user);
+
+        const [updateSql, updateParams] = mockQuery.mock.calls[1];
+        expect(updateSql).toContain('SET');
+        expect(updateSql).toContain('"name"');
+        expect(updateSql).not.toContain('"email"'); // não está sujo
+        expect(updateParams).toContain('Alice Updated');
+    });
+
+    it('save() atualiza o snapshot após UPDATE para detectar novo diff', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const [user] = await repo.find({});
+
+        user.name = 'Alice Updated';
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice Updated', email: 'alice@test.com' }]);
+        const saved = await repo.save(user);
+
+        // Segundo save sem alteração não deve emitir UPDATE
+        const result = await repo.save(saved);
+        expect(mockQuery).toHaveBeenCalledTimes(2); // find + um UPDATE
+        expect(result).toBe(saved);
+    });
+
+    it('save() em entidade sem snapshot (new) faz INSERT normalmente', async () => {
+        const user = new UserFixture();
+        user.name = 'Bob';
+        user.email = 'bob@test.com';
+        mockQuery.mockResolvedValueOnce([{ id: 2, name: 'Bob', email: 'bob@test.com' }]);
+
+        await repo.save(user);
+
+        const [sql] = mockQuery.mock.calls[0];
+        expect(sql).toContain('INSERT');
+    });
+
+    it('findAll() e findById() também armazenam snapshot', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const [fromAll] = await repo.findAll();
+        expect(entitySnapshots.has(fromAll as object)).toBe(true);
+
+        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        const fromId = await repo.findById(1);
+        expect(entitySnapshots.has(fromId as object)).toBe(true);
+    });
+});
+
+// ─── QueryError verbose ───────────────────────────────────────────────────────
+
+describe('QueryError.verbose', () => {
+    afterEach(() => {
+        QueryError.verbose = false;
+    });
+
+    it('sem verbose: mensagem não contém SQL nem params', () => {
+        const err = new QueryError('SELECT * FROM users', new Error('syntax error'), [42]);
+        expect(err.message).not.toContain('SELECT');
+        expect(err.message).not.toContain('42');
+        expect(err.message).toBe('Query failed: syntax error');
+    });
+
+    it('com verbose: mensagem contém SQL', () => {
+        QueryError.verbose = true;
+        const err = new QueryError('SELECT * FROM users WHERE id = $1', new Error('oops'), [99]);
+        expect(err.message).toContain('SELECT * FROM users WHERE id = $1');
+    });
+
+    it('com verbose: mensagem contém params serializado', () => {
+        QueryError.verbose = true;
+        const err = new QueryError('SELECT 1', new Error('oops'), [1, 'alice', true]);
+        expect(err.message).toContain('[1,"alice",true]');
+    });
+
+    it('com verbose e sem params: não adiciona linha de Params', () => {
+        QueryError.verbose = true;
+        const err = new QueryError('SELECT 1', new Error('oops'));
+        expect(err.message).toContain('SELECT 1');
+        expect(err.message).not.toContain('Params');
+    });
+
+    it('query e params ficam acessíveis como propriedades independente do verbose', () => {
+        const err = new QueryError('SELECT 1', new Error('fail'), [7]);
+        expect(err.query).toBe('SELECT 1');
+        expect(err.params).toEqual([7]);
+        expect(err.originalError).toBeInstanceOf(Error);
     });
 });

@@ -149,8 +149,8 @@ export class SqlAssembler<T> {
         };
     }
 
-    public buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): { sql: string; params: Array<unknown> } {
-        const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
+    public buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): { sql: string; params: Array<unknown> } {
+        const columns = dirtyColumns ?? this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
         const params = [...columns.map(c => record[c.propertyKey]), pkValue];
         return {

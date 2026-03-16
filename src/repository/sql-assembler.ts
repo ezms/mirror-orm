@@ -20,20 +20,20 @@ export type OtmInfo = {
 
 export type FindPlan<T> = {
     sql: string;
-    params: unknown[];
-    mtoRelations: ManyToOneInfo[];
-    otmRelations: OtmInfo[];
-    otoInverseRelations: OtmInfo[];
+    params: Array<unknown>;
+    mtoRelations: Array<ManyToOneInfo>;
+    otmRelations: Array<OtmInfo>;
+    otoInverseRelations: Array<OtmInfo>;
 };
 
 export class SqlAssembler<T> {
     constructor(private readonly state: RepositoryState<T>) {}
 
-    buildFind(options: IFindOptions<T>): FindPlan<T> {
+    public buildFind(options: IFindOptions<T>): FindPlan<T> {
         const requestedRelations = options.relations ?? [];
-        const mtoRelations: ManyToOneInfo[] = [];
-        const otmRelations: OtmInfo[] = [];
-        const otoInverseRelations: OtmInfo[] = [];
+        const mtoRelations: Array<ManyToOneInfo> = [];
+        const otmRelations: Array<OtmInfo> = [];
+        const otoInverseRelations: Array<OtmInfo> = [];
 
         for (const relName of requestedRelations) {
             const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
@@ -67,7 +67,7 @@ export class SqlAssembler<T> {
             }
         }
 
-        const params: unknown[] = [];
+        const params: Array<unknown> = [];
         let selectPart = mtoRelations.length > 0 ? this.state.qualifiedSelectClause : this.state.selectClause;
 
         if (mtoRelations.length > 0) {
@@ -104,15 +104,15 @@ export class SqlAssembler<T> {
         return { sql, params, mtoRelations, otmRelations, otoInverseRelations };
     }
 
-    buildCount(where?: IFindOptions<T>['where']): { sql: string; params: unknown[] } {
-        const params: unknown[] = [];
+    public buildCount(where?: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
+        const params: Array<unknown> = [];
         return {
             sql: `SELECT COUNT(*) FROM ${this.state.quotedTableName}${this.buildWhere(where, params)}`,
             params,
         };
     }
 
-    buildInsert(record: Record<string, unknown>, isIdentity: boolean): { sql: string; params: unknown[] } {
+    public buildInsert(record: Record<string, unknown>, isIdentity: boolean): { sql: string; params: Array<unknown> } {
         const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const params = columns.map(c => record[c.propertyKey]);
@@ -123,10 +123,10 @@ export class SqlAssembler<T> {
         };
     }
 
-    buildBulkInsert(records: Record<string, unknown>[], isIdentity: boolean): { sql: string; params: unknown[] } {
+    public buildBulkInsert(records: Record<string, unknown>[], isIdentity: boolean): { sql: string; params: Array<unknown> } {
         const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && records[0][c.propertyKey] !== undefined);
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
-        const allParams: unknown[] = [];
+        const allParams: Array<unknown> = [];
         const rowPlaceholders = records.map(record => {
             const placeholders = columns.map(c => {
                 allParams.push(record[c.propertyKey]);
@@ -140,7 +140,7 @@ export class SqlAssembler<T> {
         };
     }
 
-    buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): { sql: string; params: unknown[] } {
+    public buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): { sql: string; params: Array<unknown> } {
         const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
         const params = [...columns.map(c => record[c.propertyKey]), pkValue];
@@ -150,9 +150,9 @@ export class SqlAssembler<T> {
         };
     }
 
-    buildUpdate(data: Partial<T>, where: IFindOptions<T>['where']): { sql: string; params: unknown[] } {
+    public buildUpdate(data: Partial<T>, where: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
         const record = data as Record<string, unknown>;
-        const params: unknown[] = [];
+        const params: Array<unknown> = [];
         const columns = this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
         if (columns.length === 0) throw new QueryError('UPDATE', new Error('No updatable columns provided'));
         const setClauses = columns.map(c => {
@@ -166,23 +166,23 @@ export class SqlAssembler<T> {
         };
     }
 
-    buildDelete(where: IFindOptions<T>['where']): { sql: string; params: unknown[] } {
-        const params: unknown[] = [];
+    public buildDelete(where: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
+        const params: Array<unknown> = [];
         return {
             sql: `DELETE FROM ${this.state.quotedTableName}${this.buildWhere(where, params)} RETURNING 1`,
             params,
         };
     }
 
-    buildRemove(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
+    public buildRemove(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
         return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
     }
 
-    buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
+    public buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
         return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY($1)`;
     }
 
-    private buildWhere(where: IFindOptions<T>['where'], params: unknown[]): string {
+    private buildWhere(where: IFindOptions<T>['where'], params: Array<unknown>): string {
         if (!where) return '';
         const groups = Array.isArray(where) ? where : [where];
         const clauses = groups
@@ -192,8 +192,8 @@ export class SqlAssembler<T> {
         return clauses.length > 0 ? ` WHERE ${clauses.join(' OR ')}` : '';
     }
 
-    private buildWhereGroup(condition: Record<string, unknown>, params: unknown[]): string[] {
-        const clauses: string[] = [];
+    private buildWhereGroup(condition: Record<string, unknown>, params: Array<unknown>): Array<string> {
+        const clauses: Array<string> = [];
         for (const [key, value] of Object.entries(condition)) {
             const column = this.state.columnMap.get(key);
             if (!column) continue;

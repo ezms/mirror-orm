@@ -5,6 +5,7 @@ import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Like } from '../operators';
 import { Repository, RepositoryState } from '../repository/repository';
+import { transactionStore } from '../context/transaction-store';
 import { AccountFixture, AuthorFixture, BookFixture, PostFixture, UserFixture } from './fixtures/user.entity';
 
 // force decorator registration
@@ -955,5 +956,90 @@ describe('RepositoryState.quoteIdentifier', () => {
 
     it('escapa múltiplas aspas duplas consecutivas', () => {
         expect(state.quoteIdentifier('a""b')).toBe('"a""""b"');
+    });
+});
+
+// ─── AsyncLocalStorage ────────────────────────────────────────────────────────
+
+describe('AsyncLocalStorage — propagação implícita de transação', () => {
+    let defaultMock: Mock;
+    let txMock: Mock;
+    let repo: Repository<UserFixture>;
+
+    beforeEach(() => {
+        defaultMock = vi.fn().mockResolvedValue([{ id: 1, name: 'Default', email: 'x' }]);
+        txMock      = vi.fn().mockResolvedValue([{ id: 2, name: 'TX',      email: 'y' }]);
+        repo = new Repository(UserFixture, { query: defaultMock }, registry.getEntity('UserFixture')!);
+    });
+
+    it('usa o runner padrão fora de qualquer contexto de transação', async () => {
+        const result = await repo.findAll();
+        expect(defaultMock).toHaveBeenCalledTimes(1);
+        expect(result[0].name).toBe('Default');
+    });
+
+    it('usa o runner do ALS dentro do store.run()', async () => {
+        let result: UserFixture[] = [];
+        await transactionStore.run({ query: txMock }, async () => {
+            result = await repo.findAll();
+        });
+        expect(txMock).toHaveBeenCalledTimes(1);
+        expect(defaultMock).not.toHaveBeenCalled();
+        expect(result[0].name).toBe('TX');
+    });
+
+    it('volta ao runner padrão após sair do store.run()', async () => {
+        await transactionStore.run({ query: txMock }, async () => {
+            await repo.findAll();
+        });
+        txMock.mockClear();
+        const result = await repo.findAll();
+        expect(defaultMock).toHaveBeenCalledTimes(1);
+        expect(result[0].name).toBe('Default');
+    });
+
+    it('withTransaction ignora o ALS (runner pinado tem precedência)', async () => {
+        const pinnedMock = vi.fn().mockResolvedValue([{ id: 3, name: 'Pinned', email: 'z' }]);
+        const pinnedRepo = repo.withTransaction({ query: pinnedMock });
+
+        let result: UserFixture[] = [];
+        await transactionStore.run({ query: txMock }, async () => {
+            result = await pinnedRepo.findAll();
+        });
+
+        expect(pinnedMock).toHaveBeenCalledTimes(1);
+        expect(txMock).not.toHaveBeenCalled();
+        expect(result[0].name).toBe('Pinned');
+    });
+
+    it('contextos paralelos são isolados entre si', async () => {
+        const txMockA = vi.fn().mockResolvedValue([{ id: 10, name: 'A', email: 'a' }]);
+        const txMockB = vi.fn().mockResolvedValue([{ id: 20, name: 'B', email: 'b' }]);
+
+        let resultA: UserFixture[] = [];
+        let resultB: UserFixture[] = [];
+
+        await Promise.all([
+            transactionStore.run({ query: txMockA }, async () => { resultA = await repo.findAll(); }),
+            transactionStore.run({ query: txMockB }, async () => { resultB = await repo.findAll(); }),
+        ]);
+
+        expect(resultA[0].name).toBe('A');
+        expect(resultB[0].name).toBe('B');
+        expect(txMockA).toHaveBeenCalledTimes(1);
+        expect(txMockB).toHaveBeenCalledTimes(1);
+    });
+
+    it('withTransaction em contexto ALS usa o runner pinado, não o ALS', async () => {
+        const pinnedMock2 = vi.fn().mockResolvedValue([{ id: 99, name: 'Pinned2', email: 'p' }]);
+        const pinnedRepo2 = repo.withTransaction({ query: pinnedMock2 });
+
+        await transactionStore.run({ query: txMock }, async () => {
+            await pinnedRepo2.findAll();
+        });
+
+        expect(pinnedMock2).toHaveBeenCalledTimes(1);
+        expect(txMock).not.toHaveBeenCalled();
+        expect(defaultMock).not.toHaveBeenCalled();
     });
 });

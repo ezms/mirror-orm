@@ -5,6 +5,7 @@ import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
+import { transactionStore } from '../context/transaction-store';
 import { RepositoryState } from './repository-state';
 import { SqlAssembler } from './sql-assembler';
 
@@ -14,29 +15,38 @@ export class Repository<T> {
     private readonly state: RepositoryState<T>;
     private readonly runner: IQueryRunner;
     private readonly assembler: SqlAssembler<T>;
+    private readonly alsEnabled: boolean;
 
     constructor(target: new () => T, runner: IQueryRunner, metadata: IEntityMetadata);
-    constructor(state: RepositoryState<T>, runner: IQueryRunner);
+    constructor(state: RepositoryState<T>, runner: IQueryRunner, alsEnabled?: boolean);
     constructor(
         targetOrState: (new () => T) | RepositoryState<T>,
         runner: IQueryRunner,
-        metadata?: IEntityMetadata,
+        metadataOrAls?: IEntityMetadata | boolean,
     ) {
         this.runner = runner;
-        this.state = targetOrState instanceof RepositoryState
-            ? targetOrState
-            : new RepositoryState(targetOrState, metadata!);
+        if (targetOrState instanceof RepositoryState) {
+            this.state = targetOrState;
+            this.alsEnabled = typeof metadataOrAls === 'boolean' ? metadataOrAls : true;
+        } else {
+            this.state = new RepositoryState(targetOrState, metadataOrAls as IEntityMetadata);
+            this.alsEnabled = true;
+        }
         this.assembler = new SqlAssembler(this.state);
     }
 
+    private get activeRunner(): IQueryRunner {
+        return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.runner;
+    }
+
     public withTransaction(runner: IQueryRunner): Repository<T> {
-        return new Repository(this.state, runner);
+        return new Repository(this.state, runner, false);
     }
 
     public async findAll(): Promise<Array<T>> {
         const stmt = this.state.findAllStatement;
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(stmt);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(stmt);
             return rows.map(this.state.hydrator);
         } catch (error) {
             throw new QueryError(stmt.text, error);
@@ -47,7 +57,7 @@ export class Repository<T> {
         const stmt = this.state.findByIdStatement;
         if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>({ ...stmt, values: [id] });
+            const rows = await this.activeRunner.query<Record<string, unknown>>({ ...stmt, values: [id] });
             return rows.length > 0 ? this.state.hydrator(rows[0]) : null;
         } catch (error) {
             throw new QueryError(stmt.text, error);
@@ -57,7 +67,7 @@ export class Repository<T> {
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         const plan = this.assembler.buildFind(options);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(plan.sql, plan.params);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(plan.sql, plan.params);
 
             const entities = rows.map(row => {
                 const entity = this.state.hydrator(row) as Record<string, unknown>;
@@ -76,7 +86,7 @@ export class Repository<T> {
 
                 for (const { relation, relatedState } of plan.otmRelations) {
                     const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
-                    const relRows = await this.runner.query<Record<string, unknown>>(fkSql, [mainIds]);
+                    const relRows = await this.activeRunner.query<Record<string, unknown>>(fkSql, [mainIds]);
 
                     const grouped = new Map<unknown, Array<unknown>>();
                     for (const relRow of relRows) {
@@ -93,7 +103,7 @@ export class Repository<T> {
 
                 for (const { relation, relatedState } of plan.otoInverseRelations) {
                     const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
-                    const relRows = await this.runner.query<Record<string, unknown>>(fkSql, [mainIds]);
+                    const relRows = await this.activeRunner.query<Record<string, unknown>>(fkSql, [mainIds]);
 
                     const grouped = new Map<unknown, unknown>();
                     for (const relRow of relRows) {
@@ -112,7 +122,7 @@ export class Repository<T> {
                     const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
                     const ownerAlias = '_mirror_mtm_fk_';
                     const mtmSql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY($1)`;
-                    const relRows = await this.runner.query<Record<string, unknown>>(mtmSql, [mainIds]);
+                    const relRows = await this.activeRunner.query<Record<string, unknown>>(mtmSql, [mainIds]);
 
                     const grouped = new Map<unknown, Array<unknown>>();
                     for (const relRow of relRows) {
@@ -152,7 +162,7 @@ export class Repository<T> {
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildCount(where);
         try {
-            const rows = await this.runner.query<{ count: string }>(sql, params);
+            const rows = await this.activeRunner.query<{ count: string }>(sql, params);
             return parseInt(rows[0].count, 10);
         } catch (error) {
             throw new QueryError(sql, error);
@@ -175,7 +185,7 @@ export class Repository<T> {
 
         const { sql, params } = this.assembler.buildBulkInsert(records, isIdentity);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(sql, params);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
             return rows.map(this.state.hydrator);
         } catch (error) {
             throw new QueryError(sql, error);
@@ -193,7 +203,7 @@ export class Repository<T> {
 
         const sql = this.assembler.buildRemoveMany(pk);
         try {
-            await this.runner.query(sql, [ids]);
+            await this.activeRunner.query(sql, [ids]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
@@ -219,7 +229,7 @@ export class Repository<T> {
 
         const sql = this.assembler.buildRemove(pk);
         try {
-            await this.runner.query(sql, [pkValue]);
+            await this.activeRunner.query(sql, [pkValue]);
         } catch (error) {
             throw new QueryError(sql, error);
         }
@@ -228,7 +238,7 @@ export class Repository<T> {
     public async update(data: Partial<T>, where: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildUpdate(data, where);
         try {
-            const rows = await this.runner.query(sql, params);
+            const rows = await this.activeRunner.query(sql, params);
             return rows.length;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -238,7 +248,7 @@ export class Repository<T> {
     public async delete(where: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildDelete(where);
         try {
-            const rows = await this.runner.query(sql, params);
+            const rows = await this.activeRunner.query(sql, params);
             return rows.length;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -252,7 +262,7 @@ export class Repository<T> {
         }
         const { sql, params } = this.assembler.buildInsert(record, isIdentity);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(sql, params);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
             return this.state.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);
@@ -262,7 +272,7 @@ export class Repository<T> {
     private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown): Promise<T> {
         const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue);
         try {
-            const rows = await this.runner.query<Record<string, unknown>>(sql, params);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
             return this.state.hydrator(rows[0]);
         } catch (error) {
             throw new QueryError(sql, error);

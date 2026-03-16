@@ -1,4 +1,5 @@
 import { PgAdapter } from '../adapters/pg/pg-adapter';
+import { transactionStore } from '../context/transaction-store';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
@@ -38,10 +39,12 @@ export class Connection {
             ? new LoggingTransactionRunner(runner, this.options.logger)
             : runner;
         try {
-            const result = await callback(
-                new TransactionContext(
-                    loggingRunner,
-                    <T>(target: new () => T) => new Repository<T>(this.getOrCompile(target), loggingRunner),
+            const result = await transactionStore.run(loggingRunner, () =>
+                callback(
+                    new TransactionContext(
+                        loggingRunner,
+                        <T>(target: new () => T) => new Repository<T>(this.getOrCompile(target), loggingRunner, false),
+                    ),
                 ),
             );
             await runner.commit();

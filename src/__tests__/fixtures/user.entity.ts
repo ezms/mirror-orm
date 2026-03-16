@@ -2,6 +2,7 @@ import { Column } from '../../decorators/column';
 import { Entity } from '../../decorators/entity';
 import { ManyToOne } from '../../decorators/many-to-one';
 import { OneToMany } from '../../decorators/one-to-many';
+import { OneToOne } from '../../decorators/one-to-one';
 import { PrimaryColumn } from '../../decorators/primary-column';
 
 @Entity('users')
@@ -77,6 +78,35 @@ export class CategoryFixture {
 
     @Column()
     name!: string;
+}
+
+// OneToOne: inverse side (no FK in this entity)
+@Entity('persons')
+export class PersonFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    name!: string;
+
+    @OneToOne(() => PersonProfileFixture, 'person_id')
+    profile!: PersonProfileFixture;
+}
+
+// OneToOne: owner side (holds person_id FK)
+@Entity('person_profiles')
+export class PersonProfileFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    bio!: string;
+
+    @Column({ name: 'person_id' })
+    personId!: number;
+
+    @OneToOne(() => PersonFixture, 'person_id')
+    person!: PersonFixture;
 }
 
 // Entidade com 2× ManyToOne + type cast num campo próprio

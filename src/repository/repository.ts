@@ -70,7 +70,7 @@ export class Repository<T> {
                 return entity as T;
             });
 
-            if (plan.otmRelations.length > 0 && rows.length > 0) {
+            if (rows.length > 0) {
                 const mainPkDbName = this.state.cachedPrimaryColumn!.databaseName;
                 const mainIds = rows.map(row => row[mainPkDbName]);
 
@@ -88,6 +88,22 @@ export class Repository<T> {
                     for (let i = 0; i < entities.length; i++) {
                         const pkVal = rows[i][mainPkDbName];
                         (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? [];
+                    }
+                }
+
+                for (const { relation, relatedState } of plan.otoInverseRelations) {
+                    const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+                    const relRows = await this.runner.query<Record<string, unknown>>(fkSql, [mainIds]);
+
+                    const grouped = new Map<unknown, unknown>();
+                    for (const relRow of relRows) {
+                        const fkVal = relRow[relation.foreignKey];
+                        grouped.set(fkVal, relatedState.hydrator(relRow));
+                    }
+
+                    for (let i = 0; i < entities.length; i++) {
+                        const pkVal = rows[i][mainPkDbName];
+                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? null;
                     }
                 }
             }

@@ -7,6 +7,7 @@ export { Column } from './decorators/column';
 export { PrimaryColumn } from './decorators/primary-column';
 export { ManyToOne } from './decorators/many-to-one';
 export { OneToMany } from './decorators/one-to-many';
+export { OneToOne } from './decorators/one-to-one';
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';

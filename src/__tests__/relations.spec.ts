@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Repository } from '../repository/repository';
-import { AuthorFixture, BookFixture, CategoryFixture, RichBookFixture } from './fixtures/user.entity';
+import { AuthorFixture, BookFixture, CategoryFixture, PersonFixture, PersonProfileFixture, RichBookFixture } from './fixtures/user.entity';
 
 // force decorator registration
 void AuthorFixture;
 void BookFixture;
 void CategoryFixture;
+void PersonFixture;
+void PersonProfileFixture;
 void RichBookFixture;
 
 // ─── ManyToOne — cenários estendidos ─────────────────────────────────────────
@@ -312,5 +314,167 @@ describe('@OneToMany — agrupamento com múltiplos autores e livros', () => {
         expect(sql).toContain('WHERE');
         expect(sql).toContain('ORDER BY "id" DESC');
         expect(mockQuery).toHaveBeenCalledTimes(1); // sem resultados, não dispara 2ª query
+    });
+});
+
+// ─── OneToOne ─────────────────────────────────────────────────────────────────
+
+describe('@OneToOne — owner (tem FK)', () => {
+    let mockQuery: Mock;
+    let repo: Repository<PersonProfileFixture>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(PersonProfileFixture, { query: mockQuery }, registry.getEntity('PersonProfileFixture')!);
+    });
+
+    it('gera LEFT JOIN e hidrata a entidade relacionada', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
+        ]);
+
+        const [profile] = await repo.find({ relations: ['person'] });
+
+        const [sql] = mockQuery.mock.calls[0];
+        expect(sql).toContain('LEFT JOIN');
+        expect(sql).toContain('"persons"');
+        expect(profile.person).toBeTruthy();
+        expect(profile.person.id).toBe(10);
+        expect(profile.person.name).toBe('Alice');
+    });
+
+    it('atribui null quando FK é null', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, bio: 'Sem pessoa', person_id: null, 'mirror__person__id': null, 'mirror__person__name': null },
+        ]);
+
+        const [profile] = await repo.find({ relations: ['person'] });
+
+        expect(profile.person).toBeNull();
+    });
+
+    it('não usa JOIN quando relations não é solicitado', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, bio: 'Dev', person_id: 10 },
+        ]);
+
+        const [profile] = await repo.find({});
+
+        const [sql] = mockQuery.mock.calls[0];
+        expect(sql).not.toContain('JOIN');
+        expect((profile as unknown as Record<string, unknown>).person).toBeUndefined();
+    });
+
+    it('múltiplos perfis com pessoas distintas', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
+            { id: 2, bio: 'Designer', person_id: 20, 'mirror__person__id': 20, 'mirror__person__name': 'Bob' },
+        ]);
+
+        const profiles = await repo.find({ relations: ['person'] });
+
+        expect(profiles[0].person.name).toBe('Alice');
+        expect(profiles[1].person.name).toBe('Bob');
+    });
+
+    it('instanceof correto na entidade relacionada', async () => {
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
+        ]);
+
+        const [profile] = await repo.find({ relations: ['person'] });
+
+        expect(profile).toBeInstanceOf(PersonProfileFixture);
+        expect(profile.person).toBeInstanceOf(PersonFixture);
+    });
+});
+
+describe('@OneToOne — inverse (não tem FK)', () => {
+    let mockQuery: Mock;
+    let repo: Repository<PersonFixture>;
+
+    beforeEach(() => {
+        mockQuery = vi.fn();
+        repo = new Repository(PersonFixture, { query: mockQuery }, registry.getEntity('PersonFixture')!);
+    });
+
+    it('faz batch query separada e atribui o perfil à pessoa', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 10, name: 'Alice' }])
+            .mockResolvedValueOnce([{ id: 1, bio: 'Dev', person_id: 10 }]);
+
+        const [person] = await repo.find({ relations: ['profile'] });
+
+        expect(mockQuery).toHaveBeenCalledTimes(2);
+        const [batchSql, batchParams] = mockQuery.mock.calls[1];
+        expect(batchSql).toContain('"person_profiles"');
+        expect(batchSql).toContain('= ANY($1)');
+        expect(batchParams).toEqual([[10]]);
+
+        expect(person.profile).toBeTruthy();
+        expect(person.profile.bio).toBe('Dev');
+    });
+
+    it('atribui null quando perfil não existe para a pessoa', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 10, name: 'Alice' }])
+            .mockResolvedValueOnce([]);
+
+        const [person] = await repo.find({ relations: ['profile'] });
+
+        expect(person.profile).toBeNull();
+    });
+
+    it('distribui corretamente perfis para múltiplas pessoas', async () => {
+        mockQuery
+            .mockResolvedValueOnce([
+                { id: 10, name: 'Alice' },
+                { id: 20, name: 'Bob' },
+            ])
+            .mockResolvedValueOnce([
+                { id: 1, bio: 'Dev',      person_id: 10 },
+                { id: 2, bio: 'Designer', person_id: 20 },
+            ]);
+
+        const persons = await repo.find({ relations: ['profile'] });
+
+        expect(persons[0].profile.bio).toBe('Dev');
+        expect(persons[1].profile.bio).toBe('Designer');
+    });
+
+    it('não atribui perfil de outra pessoa (isolamento de grupos)', async () => {
+        mockQuery
+            .mockResolvedValueOnce([
+                { id: 10, name: 'Alice' },
+                { id: 20, name: 'Bob' },
+            ])
+            .mockResolvedValueOnce([
+                { id: 1, bio: 'Dev', person_id: 10 },
+                // Bob não tem perfil
+            ]);
+
+        const persons = await repo.find({ relations: ['profile'] });
+
+        expect(persons[0].profile.bio).toBe('Dev');
+        expect(persons[1].profile).toBeNull();
+    });
+
+    it('não dispara segunda query quando resultado principal está vazio', async () => {
+        mockQuery.mockResolvedValueOnce([]);
+
+        await repo.find({ relations: ['profile'] });
+
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+    });
+
+    it('instanceof correto na entidade relacionada', async () => {
+        mockQuery
+            .mockResolvedValueOnce([{ id: 10, name: 'Alice' }])
+            .mockResolvedValueOnce([{ id: 1, bio: 'Dev', person_id: 10 }]);
+
+        const [person] = await repo.find({ relations: ['profile'] });
+
+        expect(person).toBeInstanceOf(PersonFixture);
+        expect(person.profile).toBeInstanceOf(PersonProfileFixture);
     });
 });

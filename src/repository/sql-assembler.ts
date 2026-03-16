@@ -23,6 +23,7 @@ export type FindPlan<T> = {
     params: unknown[];
     mtoRelations: ManyToOneInfo[];
     otmRelations: OtmInfo[];
+    otoInverseRelations: OtmInfo[];
 };
 
 export class SqlAssembler<T> {
@@ -32,6 +33,7 @@ export class SqlAssembler<T> {
         const requestedRelations = options.relations ?? [];
         const mtoRelations: ManyToOneInfo[] = [];
         const otmRelations: OtmInfo[] = [];
+        const otoInverseRelations: OtmInfo[] = [];
 
         for (const relName of requestedRelations) {
             const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
@@ -46,6 +48,20 @@ export class SqlAssembler<T> {
                     prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
                     pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
                 });
+            } else if (relation.type === 'one-to-one') {
+                const isOwner = this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey);
+                if (isOwner) {
+                    const prefix = `mirror__${relation.propertyKey}__`;
+                    mtoRelations.push({
+                        relation,
+                        relatedState,
+                        prefix,
+                        prefixedHydrator: relatedState.getOrBuildPrefixedHydrator(prefix),
+                        pkDbName: relatedState.cachedPrimaryColumn?.databaseName ?? 'id',
+                    });
+                } else {
+                    otoInverseRelations.push({ relation, relatedState });
+                }
             } else {
                 otmRelations.push({ relation, relatedState });
             }
@@ -85,7 +101,7 @@ export class SqlAssembler<T> {
         if (options.limit !== undefined) sql += ` LIMIT ${options.limit}`;
         if (options.offset !== undefined) sql += ` OFFSET ${options.offset}`;
 
-        return { sql, params, mtoRelations, otmRelations };
+        return { sql, params, mtoRelations, otmRelations, otoInverseRelations };
     }
 
     buildCount(where?: IFindOptions<T>['where']): { sql: string; params: unknown[] } {

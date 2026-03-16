@@ -41,7 +41,7 @@ export class RepositoryState<T> {
     }
 
     public quoteIdentifier(identifier: string): string {
-        return `"${identifier}"`;
+        return `"${identifier.replace(/"/g, '""')}"`;
     }
 
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {

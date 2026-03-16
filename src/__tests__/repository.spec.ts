@@ -4,7 +4,7 @@ import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Like } from '../operators';
-import { Repository } from '../repository/repository';
+import { Repository, RepositoryState } from '../repository/repository';
 import { AccountFixture, AuthorFixture, BookFixture, PostFixture, UserFixture } from './fixtures/user.entity';
 
 // force decorator registration
@@ -937,5 +937,23 @@ describe('@OneToMany — find({ relations })', () => {
         const [author] = await repo.find({ relations: ['books'] });
 
         expect(author.books).toEqual([]);
+    });
+});
+
+// ─── RepositoryState.quoteIdentifier ─────────────────────────────────────────
+
+describe('RepositoryState.quoteIdentifier', () => {
+    const state = new RepositoryState(UserFixture, registry.getEntity('UserFixture')!);
+
+    it('envolve o identificador em aspas duplas', () => {
+        expect(state.quoteIdentifier('users')).toBe('"users"');
+    });
+
+    it('escapa aspas duplas internas (identifier injection)', () => {
+        expect(state.quoteIdentifier('us"ers"--')).toBe('"us""ers""--"');
+    });
+
+    it('escapa múltiplas aspas duplas consecutivas', () => {
+        expect(state.quoteIdentifier('a""b')).toBe('"a""""b"');
     });
 });

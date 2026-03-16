@@ -69,3 +69,37 @@ export class BookFixture {
     @ManyToOne(() => AuthorFixture, 'author_id')
     author!: AuthorFixture;
 }
+
+@Entity('categories')
+export class CategoryFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    name!: string;
+}
+
+// Entidade com 2× ManyToOne + type cast num campo próprio
+@Entity('rich_books')
+export class RichBookFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column()
+    title!: string;
+
+    @Column({ name: 'author_id' })
+    authorId!: number;
+
+    @Column({ name: 'category_id' })
+    categoryId!: number;
+
+    @Column({ name: 'published_at', type: 'datetime' })
+    publishedAt!: Date;
+
+    @ManyToOne(() => AuthorFixture, 'author_id')
+    author!: AuthorFixture;
+
+    @ManyToOne(() => CategoryFixture, 'category_id')
+    category!: CategoryFixture;
+}

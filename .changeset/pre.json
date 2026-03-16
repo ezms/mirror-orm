@@ -6,6 +6,7 @@
   },
   "changesets": [
     "alpha-1-completion",
+    "alpha-2-completion",
     "initial-alpha-release"
   ]
 }

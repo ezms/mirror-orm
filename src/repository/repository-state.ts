@@ -1,3 +1,4 @@
+import { IDialect, PostgresDialect } from '../dialects';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IRelationMetadata } from '../interfaces/relation-metadata';
@@ -24,12 +25,14 @@ export class RepositoryState<T> {
     public readonly metadata: IEntityMetadata;
     public readonly target: new () => T;
 
+    private readonly dialect: IDialect;
     private readonly relatedStateCache = new Map<string, RepositoryState<unknown>>();
     private readonly prefixedHydratorCache = new Map<string, (row: Record<string, unknown>) => T>();
 
-    constructor(target: new () => T, metadata: IEntityMetadata) {
+    constructor(target: new () => T, metadata: IEntityMetadata, dialect: IDialect = new PostgresDialect()) {
         this.target = target;
         this.metadata = metadata;
+        this.dialect = dialect;
         this.quotedTableName = this.quoteIdentifier(metadata.tableName);
         this.columnMap = this.buildColumnMap();
         this.selectClause = this.buildSelectClause();
@@ -41,7 +44,7 @@ export class RepositoryState<T> {
     }
 
     public quoteIdentifier(identifier: string): string {
-        return `"${identifier.replace(/"/g, '""')}"`;
+        return this.dialect.quoteIdentifier(identifier);
     }
 
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {

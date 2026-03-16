@@ -19,6 +19,10 @@ export type { IConnectionOptions, IConnectionConfig } from './connection/connect
 export { PgAdapter } from './adapters/pg/pg-adapter';
 export type { IDriverAdapter } from './adapters/adapter';
 
+// ─── Dialects ─────────────────────────────────────────────────────────────────
+export { PostgresDialect } from './dialects';
+export type { IDialect } from './dialects';
+
 // ─── Repository ───────────────────────────────────────────────────────────────
 export { Repository } from './repository/repository';
 

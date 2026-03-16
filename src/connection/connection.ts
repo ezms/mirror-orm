@@ -1,5 +1,6 @@
 import { PgAdapter } from '../adapters/pg/pg-adapter';
 import { transactionStore } from '../context/transaction-store';
+import { PostgresDialect } from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
@@ -18,7 +19,7 @@ export class Connection {
     }
 
     public static async postgres(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new PgAdapter() });
+        return Connection.create({ ...config, adapter: new PgAdapter(), dialect: new PostgresDialect() });
     }
 
     public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {
@@ -68,7 +69,7 @@ export class Connection {
         }
         const metadata = registry.getEntity(key);
         if (!metadata) throw new Error(`Entity "${key}" not registered. Did you add @Entity?`);
-        const state = new RepositoryState(target, metadata);
+        const state = new RepositoryState(target, metadata, this.options.dialect);
         this.repoCache.set(key, state as RepositoryState<unknown>);
         return state;
     }

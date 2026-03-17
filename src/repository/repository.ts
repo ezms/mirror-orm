@@ -171,7 +171,11 @@ export class Repository<T> {
     }
 
     public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {
-        return Promise.all([this.find(options), this.count(options.where)]);
+        const { sql, params } = this.assembler.buildCount(options.where, options.withDeleted);
+        const countPromise = this.activeRunner.query<{ count: string }>(sql, params)
+            .then(rows => parseInt(rows[0].count, 10))
+            .catch(error => { throw new QueryError(sql, error, params); });
+        return Promise.all([this.find(options), countPromise]);
     }
 
     public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {

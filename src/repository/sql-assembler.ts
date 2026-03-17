@@ -109,10 +109,16 @@ export class SqlAssembler<T> {
         return { sql, params, mtoRelations, otmRelations, otoInverseRelations, mtmRelations };
     }
 
-    public buildCount(where?: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
+    public buildCount(where?: IFindOptions<T>['where'], withDeleted?: boolean): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
+        let whereSql = this.buildWhere(where, params);
+        const sdCol = this.state.cachedDeletedAtColumn;
+        if (sdCol && !withDeleted) {
+            const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;
+            whereSql += whereSql ? ` AND ${sdClause}` : ` WHERE ${sdClause}`;
+        }
         return {
-            sql: `SELECT COUNT(*) FROM ${this.state.quotedTableName}${this.buildWhere(where, params)}`,
+            sql: `SELECT COUNT(*) FROM ${this.state.quotedTableName}${whereSql}`,
             params,
         };
     }

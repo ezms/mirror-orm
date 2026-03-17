@@ -53,10 +53,10 @@ export class Repository<T> {
     }
 
     private captureSnapshot(entity: T): T {
-        const snap: Record<string, unknown> = {};
-        for (const col of this.state.metadata.columns) {
-            snap[col.propertyKey] = (entity as Record<string, unknown>)[col.propertyKey];
-        }
+        const cols = this.state.metadata.columns;
+        const snap = new Array<unknown>(cols.length);
+        const rec = entity as Record<string, unknown>;
+        for (let i = 0; i < cols.length; i++) snap[i] = rec[cols[i].propertyKey];
         entitySnapshots.set(entity as object, snap);
         return entity;
     }
@@ -94,13 +94,19 @@ export class Repository<T> {
             const entities = this.hydrateMainRows(rows, plan);
 
             if (rows.length > 0) {
-                const mainPkDbName = this.state.cachedPrimaryColumn!.databaseName;
-                const mainIds = rows.map(row => row[mainPkDbName]);
-                await Promise.all([
-                    ...plan.otmRelations.map(r => this.loadOtmRelation(entities, rows, mainPkDbName, mainIds, r)),
-                    ...plan.otoInverseRelations.map(r => this.loadOtoInverseRelation(entities, rows, mainPkDbName, mainIds, r)),
-                    ...plan.mtmRelations.map(r => this.loadMtmRelation(entities, rows, mainPkDbName, mainIds, r)),
-                ]);
+                const hasRelations =
+                    plan.otmRelations.length > 0 ||
+                    plan.otoInverseRelations.length > 0 ||
+                    plan.mtmRelations.length > 0;
+                if (hasRelations) {
+                    const mainPkDbName = this.state.cachedPrimaryColumn!.databaseName;
+                    const mainIds = rows.map(row => row[mainPkDbName]);
+                    await Promise.all([
+                        ...plan.otmRelations.map(r => this.loadOtmRelation(entities, rows, mainPkDbName, mainIds, r)),
+                        ...plan.otoInverseRelations.map(r => this.loadOtoInverseRelation(entities, rows, mainPkDbName, mainIds, r)),
+                        ...plan.mtmRelations.map(r => this.loadMtmRelation(entities, rows, mainPkDbName, mainIds, r)),
+                    ]);
+                }
             }
 
             if (this.state.metadata.hooks.afterLoad.length > 0)
@@ -331,7 +337,7 @@ export class Repository<T> {
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
                 const dirtyColumns = this.state.metadata.columns.filter(
-                    c => !c.primary && record[c.propertyKey] !== snapshot[c.propertyKey],
+                    (c, i) => !c.primary && record[c.propertyKey] !== snapshot[i],
                 );
                 saved = dirtyColumns.length === 0 ? entity : await this.updateById(record, pk, pkValue, dirtyColumns);
             } else {

@@ -248,6 +248,20 @@ export class Repository<T> {
         return new Repository(relatedState, this.activeRunner, false);
     }
 
+    private applyAutoFkMapping(record: Record<string, unknown>): void {
+        for (const relation of this.state.metadata.relations) {
+            if (!this.isMtoOrOtoOwner(relation)) continue;
+            const related = record[relation.propertyKey];
+            if (!related || typeof related !== 'object') continue;
+            const fkCol = this.state.metadata.columns.find(c => c.databaseName === relation.foreignKey);
+            if (!fkCol || record[fkCol.propertyKey] !== undefined) continue;
+            const pkVal = (related as Record<string, unknown>)[
+                this.state.getRelatedState(relation).cachedPrimaryColumn?.propertyKey ?? ''
+            ];
+            if (pkVal != null) record[fkCol.propertyKey] = pkVal;
+        }
+    }
+
     private injectFk(child: Record<string, unknown>, relatedState: RepositoryState<unknown>, fkDbName: string, fkValue: unknown): void {
         const fkColumn = relatedState.metadata.columns.find(c => c.databaseName === fkDbName);
         if (fkColumn) child[fkColumn.propertyKey] = fkValue;
@@ -273,6 +287,8 @@ export class Repository<T> {
             }
             record[relation.propertyKey] = savedRelated;
         }
+
+        this.applyAutoFkMapping(record);
 
         const pk = this.primaryColumn();
         const pkValue = record[pk.propertyKey];

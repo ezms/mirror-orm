@@ -1,5 +1,11 @@
 # mirror-orm
 
+## 0.1.0-alpha.3
+
+### Minor Changes
+
+- Alpha 3: lifecycle hooks, timestamps, soft delete, upsert, findAndCount, find({ select }), select: false, ULID, CUID2, SSL support, autoFkMap precomputation, find() decomposition with parallel relation loading.
+
 ## 0.1.0-alpha.2
 
 ### Minor Changes

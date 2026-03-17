@@ -12,6 +12,9 @@ export { OneToOne } from './decorators/one-to-one';
 export { CreatedAt } from './decorators/created-at';
 export { UpdatedAt } from './decorators/updated-at';
 export { DeletedAt } from './decorators/deleted-at';
+export { BeforeInsert } from './decorators/before-insert';
+export { BeforeUpdate } from './decorators/before-update';
+export { AfterLoad } from './decorators/after-load';
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';

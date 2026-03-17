@@ -1,7 +1,7 @@
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IRelationMetadata } from '../interfaces/relation-metadata';
 import { registry } from '../metadata/registry';
-import { COLUMNS_KEY, RELATIONS_KEY } from '../metadata/symbols';
+import { COLUMNS_KEY, HOOKS_KEY, RELATIONS_KEY } from '../metadata/symbols';
 
 type EntityDecorator = <T extends new (...args: Array<any>) => any>(value: T, context: ClassDecoratorContext) => void;
 
@@ -15,12 +15,18 @@ const applyEntity = (tableName: string | undefined, context: ClassDecoratorConte
     const className = String(context.name);
     const columns = (context.metadata?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [];
     const relations = (context.metadata?.[RELATIONS_KEY] as Array<IRelationMetadata> | undefined) ?? [];
+    const rawHooks = (context.metadata?.[HOOKS_KEY] as Record<string, Array<string>> | undefined) ?? {};
 
     registry.registerEntity(className, {
         tableName: tableName ?? className.toLowerCase(),
         className,
         columns,
         relations,
+        hooks: {
+            beforeInsert: rawHooks.beforeInsert ?? [],
+            beforeUpdate: rawHooks.beforeUpdate ?? [],
+            afterLoad:    rawHooks.afterLoad    ?? [],
+        },
     });
 };
 

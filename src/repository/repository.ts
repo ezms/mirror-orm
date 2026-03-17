@@ -41,6 +41,17 @@ export class Repository<T> {
         return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.runner;
     }
 
+    private async runHooks(entity: T, methods: Array<string>): Promise<void> {
+        for (const method of methods) await ((entity as Record<string, unknown>)[method] as Function)?.();
+    }
+
+    private async hydrateWithHooks(rows: Array<Record<string, unknown>>): Promise<Array<T>> {
+        const entities = rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+        if (this.state.metadata.hooks.afterLoad.length > 0)
+            for (const entity of entities) await this.runHooks(entity, this.state.metadata.hooks.afterLoad);
+        return entities;
+    }
+
     private captureSnapshot(entity: T): T {
         const snap: Record<string, unknown> = {};
         for (const col of this.state.metadata.columns) {
@@ -58,7 +69,7 @@ export class Repository<T> {
         const stmt = this.state.findAllStatement;
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(stmt);
-            return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+            return this.hydrateWithHooks(rows);
         } catch (error) {
             throw new QueryError(stmt.text, error, []);
         }
@@ -69,7 +80,8 @@ export class Repository<T> {
         if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>({ ...stmt, values: [id] });
-            return rows.length > 0 ? this.captureSnapshot(this.state.hydrator(rows[0])) : null;
+            if (rows.length === 0) return null;
+            return (await this.hydrateWithHooks(rows))[0];
         } catch (error) {
             throw new QueryError(stmt.text, error, [id]);
         }
@@ -148,6 +160,9 @@ export class Repository<T> {
                     }
                 }
             }
+
+            if (this.state.metadata.hooks.afterLoad.length > 0)
+                for (const entity of entities) await this.runHooks(entity, this.state.metadata.hooks.afterLoad);
 
             return entities;
         } catch (error) {
@@ -297,6 +312,7 @@ export class Repository<T> {
         let saved: T;
 
         if (typeof pkValue !== 'undefined' && pkValue !== null) {
+            await this.runHooks(entity, this.state.metadata.hooks.beforeUpdate);
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
@@ -308,6 +324,7 @@ export class Repository<T> {
                 saved = await this.updateById(record, pk, pkValue);
             }
         } else {
+            await this.runHooks(entity, this.state.metadata.hooks.beforeInsert);
             if (createdAtCol) record[createdAtCol.propertyKey] = new Date();
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             saved = await this.insert(record, pk);

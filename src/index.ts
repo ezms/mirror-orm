@@ -59,4 +59,4 @@ export type { IPrimaryColumnOptions } from './interfaces/primary-column-options'
 export type { GenerationStrategy } from './interfaces/generation-strategy';
 export type { INamedQuery, IQueryRunner } from './interfaces/query-runner';
 export type { ITransactionRunner } from './interfaces/transaction-runner';
-export type { IRelationMetadata, RelationType } from './interfaces/relation-metadata';
+export type { IRelationMetadata, RelationType, CascadeType } from './interfaces/relation-metadata';

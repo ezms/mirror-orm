@@ -4,6 +4,7 @@ import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
+import { CascadeType, IRelationMetadata } from '../interfaces/relation-metadata';
 import { generateUuidV4, generateUuidV7 } from '../utils/generators';
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
@@ -220,9 +221,62 @@ export class Repository<T> {
     }
 
     public async save(entity: T): Promise<T> {
-        const pk = this.primaryColumn();
+        return this.saveInternal(entity, new Set<object>());
+    }
+
+    public async remove(entity: T): Promise<void> {
+        return this.removeInternal(entity, new Set<object>());
+    }
+
+    private hasCascade(relation: IRelationMetadata, op: CascadeType): boolean {
+        if (!relation.cascade) return false;
+        if (relation.cascade === true) return true;
+        return (relation.cascade as Array<CascadeType>).includes(op);
+    }
+
+    private isOtmOrOtoInverse(relation: IRelationMetadata): boolean {
+        return relation.type === 'one-to-many' ||
+            (relation.type === 'one-to-one' && !this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey));
+    }
+
+    private isMtoOrOtoOwner(relation: IRelationMetadata): boolean {
+        return relation.type === 'many-to-one' ||
+            (relation.type === 'one-to-one' && this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey));
+    }
+
+    private relatedRepo<R>(relatedState: RepositoryState<R>): Repository<R> {
+        return new Repository(relatedState, this.activeRunner, false);
+    }
+
+    private injectFk(child: Record<string, unknown>, relatedState: RepositoryState<unknown>, fkDbName: string, fkValue: unknown): void {
+        const fkColumn = relatedState.metadata.columns.find(c => c.databaseName === fkDbName);
+        if (fkColumn) child[fkColumn.propertyKey] = fkValue;
+    }
+
+    private async saveInternal(entity: T, visited: Set<object>): Promise<T> {
+        if (visited.has(entity as object)) return entity;
+        visited.add(entity as object);
+
         const record = entity as Record<string, unknown>;
+
+        for (const relation of this.state.metadata.relations) {
+            if (!this.isMtoOrOtoOwner(relation)) continue;
+            if (!this.hasCascade(relation, 'insert') && !this.hasCascade(relation, 'update')) continue;
+            const related = record[relation.propertyKey];
+            if (!related || typeof related !== 'object') continue;
+            const relatedState = this.state.getRelatedState(relation);
+            const savedRelated = await this.relatedRepo(relatedState).saveInternal(related as T, visited) as Record<string, unknown>;
+            const relPk = relatedState.cachedPrimaryColumn;
+            if (relPk) {
+                const fkCol = this.state.metadata.columns.find(c => c.databaseName === relation.foreignKey);
+                if (fkCol) record[fkCol.propertyKey] = savedRelated[relPk.propertyKey];
+            }
+            record[relation.propertyKey] = savedRelated;
+        }
+
+        const pk = this.primaryColumn();
         const pkValue = record[pk.propertyKey];
+        let saved: T;
 
         if (typeof pkValue !== 'undefined' && pkValue !== null) {
             const snapshot = entitySnapshots.get(entity as object);
@@ -230,22 +284,63 @@ export class Repository<T> {
                 const dirtyColumns = this.state.metadata.columns.filter(
                     c => !c.primary && record[c.propertyKey] !== snapshot[c.propertyKey],
                 );
-                if (dirtyColumns.length === 0) return entity;
-                return this.updateById(record, pk, pkValue, dirtyColumns);
+                saved = dirtyColumns.length === 0 ? entity : await this.updateById(record, pk, pkValue, dirtyColumns);
+            } else {
+                saved = await this.updateById(record, pk, pkValue);
+            }
+        } else {
+            saved = await this.insert(record, pk);
+        }
+
+        const savedPk = (saved as Record<string, unknown>)[pk.propertyKey];
+
+        for (const relation of this.state.metadata.relations) {
+            if (!this.isOtmOrOtoInverse(relation)) continue;
+            if (!this.hasCascade(relation, 'insert') && !this.hasCascade(relation, 'update')) continue;
+            const children = record[relation.propertyKey];
+            if (!children) continue;
+            const relatedState = this.state.getRelatedState(relation);
+            const relRepo = this.relatedRepo(relatedState);
+
+            if (relation.type === 'one-to-many') {
+                const childArray = children as Array<Record<string, unknown>>;
+                for (const child of childArray) this.injectFk(child, relatedState, relation.foreignKey, savedPk);
+                const relPk = relatedState.cachedPrimaryColumn;
+                const isNew = (c: Record<string, unknown>) => !relPk || c[relPk.propertyKey] === undefined || c[relPk.propertyKey] === null;
+                const newOnes = childArray.filter(isNew);
+                const existing = childArray.filter(c => !isNew(c));
+                if (newOnes.length > 0) await relRepo.saveMany(newOnes as Array<T>);
+                for (const child of existing) await relRepo.saveInternal(child as T, visited);
+            } else {
+                const child = children as Record<string, unknown>;
+                this.injectFk(child, relatedState, relation.foreignKey, savedPk);
+                await relRepo.saveInternal(child as T, visited);
             }
         }
 
-        return typeof pkValue === 'undefined' || pkValue === null
-            ? this.insert(record, pk)
-            : this.updateById(record, pk, pkValue);
+        return saved;
     }
 
-    public async remove(entity: T): Promise<void> {
+    private async removeInternal(entity: T, visited: Set<object>): Promise<void> {
+        if (visited.has(entity as object)) return;
+        visited.add(entity as object);
+
         const pk = this.primaryColumn();
         const pkValue = (entity as Record<string, unknown>)[pk.propertyKey];
-
         if (typeof pkValue === 'undefined' || pkValue === null) {
             throw new MissingPrimaryKeyError(this.state.metadata.className, 'remove');
+        }
+
+        for (const relation of this.state.metadata.relations) {
+            if (!this.isOtmOrOtoInverse(relation)) continue;
+            if (!this.hasCascade(relation, 'remove')) continue;
+            const relatedState = this.state.getRelatedState(relation);
+            const deleteSql = `DELETE FROM ${relatedState.quotedTableName} WHERE ${relatedState.quoteIdentifier(relation.foreignKey)} = $1`;
+            try {
+                await this.activeRunner.query(deleteSql, [pkValue]);
+            } catch (error) {
+                throw new QueryError(deleteSql, error, [pkValue]);
+            }
         }
 
         const sql = this.assembler.buildRemove(pk);
@@ -253,6 +348,15 @@ export class Repository<T> {
             await this.activeRunner.query(sql, [pkValue]);
         } catch (error) {
             throw new QueryError(sql, error, [pkValue]);
+        }
+
+        for (const relation of this.state.metadata.relations) {
+            if (!this.isMtoOrOtoOwner(relation)) continue;
+            if (!this.hasCascade(relation, 'remove')) continue;
+            const related = (entity as Record<string, unknown>)[relation.propertyKey];
+            if (!related || typeof related !== 'object') continue;
+            const relatedState = this.state.getRelatedState(relation);
+            await this.relatedRepo(relatedState).removeInternal(related as T, visited);
         }
     }
 

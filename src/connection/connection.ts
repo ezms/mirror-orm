@@ -6,6 +6,7 @@ import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-
 import { registry } from '../metadata/registry';
 import { Repository, RepositoryState } from '../repository/repository';
 import { IConnectionConfig, IConnectionOptions } from './connection-options';
+import { SavepointRunner } from './savepoint-runner';
 import { TransactionContext } from './transaction-context';
 
 export class Connection {
@@ -34,7 +35,29 @@ export class Connection {
         return new Repository(this.getOrCompile(target), this.withLogger(this));
     }
 
+    private savepointCounter = 0;
+
     public async transaction<R>(callback: (trx: TransactionContext) => Promise<R>): Promise<R> {
+        const activeRunner = transactionStore.getStore();
+
+        if (activeRunner) {
+            const name = `mirror_sp_${++this.savepointCounter}`;
+            await activeRunner.query(`SAVEPOINT "${name}"`);
+            const spRunner = new SavepointRunner(activeRunner, name);
+            const repoFactory = <T>(target: new () => T) =>
+                new Repository<T>(this.getOrCompile(target), spRunner, false);
+            try {
+                const result = await transactionStore.run(spRunner, () =>
+                    callback(new TransactionContext(spRunner, repoFactory)),
+                );
+                await spRunner.commit();
+                return result;
+            } catch (error) {
+                await spRunner.rollback();
+                throw error;
+            }
+        }
+
         const runner = await this.options.adapter.acquireTransactionRunner();
         const loggingRunner = this.options.logger
             ? new LoggingTransactionRunner(runner, this.options.logger)

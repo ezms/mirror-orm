@@ -170,6 +170,10 @@ export class Repository<T> {
         }
     }
 
+    public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {
+        return Promise.all([this.find(options), this.count(options.where)]);
+    }
+
     public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {
         const rows = await this.find({ ...options, limit: 1 });
         return rows.length > 0 ? rows[0] : null;

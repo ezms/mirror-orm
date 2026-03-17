@@ -86,3 +86,39 @@ describe('find({ select })', () => {
         expect(runner.calls[0].sql).not.toContain('nonExistent');
     });
 });
+
+describe('findAndCount', () => {
+    it('returns entities and total count', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(runner);
+        const [users, count] = await repo.findAndCount({});
+        expect(Array.isArray(users)).toBe(true);
+        expect(typeof count).toBe('number');
+    });
+
+    it('issues a SELECT and a COUNT query', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(runner);
+        await repo.findAndCount({});
+        const sqls = runner.calls.map(c => c.sql);
+        expect(sqls.some(s => s.includes('SELECT "id"'))).toBe(true);
+        expect(sqls.some(s => s.includes('COUNT(*)'))).toBe(true);
+    });
+
+    it('passes where clause to both queries', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(runner);
+        await repo.findAndCount({ where: { name: 'Alice' } });
+        const withWhere = runner.calls.filter(c => c.sql.includes('WHERE'));
+        expect(withWhere).toHaveLength(2);
+    });
+
+    it('count reflects total ignoring limit and offset', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(runner);
+        await repo.findAndCount({ limit: 10, offset: 20, where: { name: 'Alice' } });
+        const countCall = runner.calls.find(c => c.sql.includes('COUNT(*)'));
+        expect(countCall!.sql).not.toContain('LIMIT');
+        expect(countCall!.sql).not.toContain('OFFSET');
+    });
+});

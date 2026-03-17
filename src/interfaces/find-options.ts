@@ -8,4 +8,5 @@ export interface IFindOptions<T> {
     relations?: Array<keyof T & string>;
     withDeleted?: boolean;
     select?: Array<keyof T & string>;
+    lock?: 'pessimistic_write' | 'pessimistic_read';
 }

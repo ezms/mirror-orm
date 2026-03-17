@@ -105,6 +105,8 @@ export class SqlAssembler<T> {
 
         if (options.limit !== undefined) sql += ` LIMIT ${options.limit}`;
         if (options.offset !== undefined) sql += ` OFFSET ${options.offset}`;
+        if (options.lock === 'pessimistic_write') sql += ' FOR UPDATE';
+        if (options.lock === 'pessimistic_read')  sql += ' FOR SHARE';
 
         return { sql, params, mtoRelations, otmRelations, otoInverseRelations, mtmRelations };
     }

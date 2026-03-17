@@ -5,7 +5,7 @@ import { IFindOptions } from '../interfaces/find-options';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { CascadeType, IRelationMetadata } from '../interfaces/relation-metadata';
-import { generateUuidV4, generateUuidV7 } from '../utils/generators';
+import { generateCuid2, generateUlid, generateUuidV4, generateUuidV7 } from '../utils/generators';
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
 import { RepositoryState } from './repository-state';
@@ -469,6 +469,8 @@ export class Repository<T> {
         switch (generation.strategy) {
             case 'uuid_v4': return generateUuidV4();
             case 'uuid_v7': return generateUuidV7();
+            case 'ulid': return generateUlid();
+            case 'cuid2': return generateCuid2();
             case 'custom': {
                 if (!generation.generate) throw new GenerationStrategyError('custom strategy requires a generate() function');
                 return generation.generate();

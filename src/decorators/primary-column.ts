@@ -16,7 +16,7 @@ const applyPrimaryColumn = (options: IPrimaryColumnOptions | undefined, context:
     const column: IColumnMetadata = {
         propertyKey: String(context.name),
         databaseName: columnName,
-        options: {},
+        options: options?.type ? { type: options.type } : {},
         primary: true,
         generation: options?.strategy
             ? { strategy: options.strategy, generate: options.generate }

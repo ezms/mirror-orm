@@ -42,6 +42,7 @@
         "vitest": "^4.0.18"
     },
     "dependencies": {
+        "@paralleldrive/cuid2": "^3.3.0",
         "pg": "^8.20.0"
     },
     "exports": {

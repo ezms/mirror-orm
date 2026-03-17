@@ -1,4 +1,29 @@
+import { createId } from '@paralleldrive/cuid2';
+
 export const generateUuidV4 = (): string => crypto.randomUUID();
+
+export const generateCuid2 = (): string => createId();
+
+const ULID_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+
+export const generateUlid = (): string => {
+    const now = Date.now();
+    const rand = crypto.getRandomValues(new Uint8Array(16));
+
+    let ts = '';
+    let t = now;
+    for (let i = 9; i >= 0; i--) {
+        ts = ULID_CHARS[t % 32] + ts;
+        t = Math.floor(t / 32);
+    }
+
+    let rnd = '';
+    for (let i = 0; i < 16; i++) {
+        rnd += ULID_CHARS[rand[i] & 0x1f];
+    }
+
+    return ts + rnd;
+};
 
 export const generateUuidV7 = (): string => {
     const timestamp = BigInt(Date.now());

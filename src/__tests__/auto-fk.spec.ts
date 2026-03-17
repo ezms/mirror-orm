@@ -91,7 +91,7 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         expect(JSON.stringify(insert!.params)).toContain('author-123');
     });
 
-    it('does not override FK when authorId is already set manually', async () => {
+    it('relation object PK takes priority over manually set FK', async () => {
         const runner = makeRunner();
         const repo = makeRepo(FkPost, runner);
 
@@ -101,8 +101,8 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         await repo.save(post);
 
         const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
-        expect(JSON.stringify(insert!.params)).toContain('manual-id');
-        expect(JSON.stringify(insert!.params)).not.toContain('author-123');
+        expect(JSON.stringify(insert!.params)).toContain('author-123');
+        expect(JSON.stringify(insert!.params)).not.toContain('manual-id');
     });
 
     it('skips FK injection when related entity has no PK', async () => {
@@ -117,6 +117,21 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
         expect(insert).toBeDefined();
         expect(JSON.stringify(insert!.params)).not.toContain('author-123');
+    });
+
+    it('syncs FK when relation object is reassigned on a loaded entity', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(FkPost, runner);
+
+        const post = Object.assign(new FkPost(), { id: 'post-1', title: 'Old', authorId: 'old-author' });
+        const newAuthor = Object.assign(new FkAuthor(), { id: 'new-author', name: 'New' });
+        post.author = newAuthor;
+
+        await repo.save(post);
+
+        const update = runner.calls.find(c => c.sql.includes('fk_posts') && c.sql.includes('UPDATE'));
+        expect(update).toBeDefined();
+        expect(JSON.stringify(update!.params)).toContain('new-author');
     });
 
     it('skips FK injection when relation property is not set', async () => {

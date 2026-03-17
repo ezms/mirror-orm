@@ -254,7 +254,7 @@ export class Repository<T> {
             const related = record[relation.propertyKey];
             if (!related || typeof related !== 'object') continue;
             const fkCol = this.state.metadata.columns.find(c => c.databaseName === relation.foreignKey);
-            if (!fkCol || record[fkCol.propertyKey] !== undefined) continue;
+            if (!fkCol) continue;
             const pkVal = (related as Record<string, unknown>)[
                 this.state.getRelatedState(relation).cachedPrimaryColumn?.propertyKey ?? ''
             ];

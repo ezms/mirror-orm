@@ -31,6 +31,7 @@ export type { IDialect } from './dialects';
 
 // ─── Repository ───────────────────────────────────────────────────────────────
 export { Repository } from './repository/repository';
+export type { IPaginatedResult, IPaginationOptions, IPaginationMeta } from './interfaces/pagination';
 
 // ─── Operators ────────────────────────────────────────────────────────────────
 export {

@@ -2,6 +2,7 @@ import { EntityNotFoundError, GenerationStrategyError, MissingPrimaryKeyError, N
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
+import { IPaginatedResult, IPaginationOptions } from '../interfaces/pagination';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { CascadeType, IRelationMetadata } from '../interfaces/relation-metadata';
@@ -195,6 +196,21 @@ export class Repository<T> {
             .then(rows => parseInt(rows[0].count, 10))
             .catch(error => { throw new QueryError(sql, error, params); });
         return Promise.all([this.find(options), countPromise]);
+    }
+
+    public async findPaginated(options: IPaginationOptions<T>): Promise<IPaginatedResult<T>> {
+        const { page, limit, ...findOptions } = options;
+        const offset = (page - 1) * limit;
+        const [data, total] = await this.findAndCount({ ...findOptions, limit, offset });
+        return {
+            data,
+            meta: {
+                total,
+                page,
+                lastPage: Math.max(1, Math.ceil(total / limit)),
+                limit,
+            },
+        };
     }
 
     public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {

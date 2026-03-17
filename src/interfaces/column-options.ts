@@ -4,4 +4,5 @@ export interface IColumnOptions {
     name?: string;
     nullable?: boolean;
     type?: ColumnType;
+    select?: boolean;
 }

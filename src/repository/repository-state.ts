@@ -66,11 +66,15 @@ export class RepositoryState<T> {
     }
 
     private buildSelectClause(): string {
-        return [...this.columnMap.values()].map(c => c.quotedDatabaseName).join(', ');
+        return [...this.columnMap.values()]
+            .filter(c => c.options.select !== false)
+            .map(c => c.quotedDatabaseName)
+            .join(', ');
     }
 
     private buildQualifiedSelectClause(): string {
         return [...this.columnMap.values()]
+            .filter(c => c.options.select !== false)
             .map(c => `${this.quotedTableName}.${c.quotedDatabaseName}`)
             .join(', ');
     }

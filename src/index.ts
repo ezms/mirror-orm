@@ -33,6 +33,9 @@ export type { IDialect } from './dialects';
 export { Repository } from './repository/repository';
 export type { IPaginatedResult, IPaginationOptions, IPaginationMeta } from './interfaces/pagination';
 
+// ─── Query Builder ────────────────────────────────────────────────────────────
+export { QueryBuilder } from './query-builder/query-builder';
+
 // ─── Operators ────────────────────────────────────────────────────────────────
 export {
     Like,

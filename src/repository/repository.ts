@@ -9,6 +9,7 @@ import { CascadeType, IRelationMetadata } from '../interfaces/relation-metadata'
 import { generateCuid2, generateUlid, generateUuidV4, generateUuidV7 } from '../utils/generators';
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
+import { QueryBuilder } from '../query-builder/query-builder';
 import { RepositoryState } from './repository-state';
 import { SqlAssembler, FindPlan, OtmInfo, MtmInfo } from './sql-assembler';
 
@@ -211,6 +212,10 @@ export class Repository<T> {
                 limit,
             },
         };
+    }
+
+    public createQueryBuilder(): QueryBuilder<T> {
+        return new QueryBuilder(this.state, this.activeRunner);
     }
 
     public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {

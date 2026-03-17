@@ -4,6 +4,7 @@ import { PostgresDialect } from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
+import { QueryBuilder } from '../query-builder/query-builder';
 import { Repository, RepositoryState } from '../repository/repository';
 import { IConnectionConfig, IConnectionOptions } from './connection-options';
 import { SavepointRunner } from './savepoint-runner';
@@ -79,6 +80,13 @@ export class Connection {
         } finally {
             runner.release();
         }
+    }
+
+    public createQueryBuilder<T>(entity: new () => T): QueryBuilder<T> {
+        const state = this.getOrCompile(entity);
+        const adapter = this.options.adapter;
+        const runner: IQueryRunner = { query: (sql, params) => adapter.query(sql as string, params) };
+        return new QueryBuilder(state, this.withLogger(runner));
     }
 
     public async disconnect(): Promise<void> {

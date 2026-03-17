@@ -179,6 +179,40 @@ export class SqlAssembler<T> {
         };
     }
 
+    public buildUpsert(
+        record: Record<string, unknown>,
+        conflictPropertyKeys: Array<string>,
+        updatePropertyKeys?: Array<string>,
+    ): { sql: string; params: Array<unknown> } {
+        const pk = this.state.cachedPrimaryColumn;
+        const isIdentity = pk?.generation?.strategy === 'identity';
+        const insertCols = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
+        const names = insertCols.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
+        const params = insertCols.map(c => record[c.propertyKey]);
+        const placeholders = params.map((_, i) => `$${i + 1}`);
+
+        const conflictCols = conflictPropertyKeys
+            .map(k => this.state.columnMap.get(k)?.quotedDatabaseName)
+            .filter((n): n is string => n !== undefined);
+
+        const updateCols = updatePropertyKeys
+            ? updatePropertyKeys
+                .map(k => this.state.columnMap.get(k))
+                .filter((c): c is NonNullable<typeof c> => c !== undefined)
+            : insertCols.filter(c =>
+                !c.primary &&
+                !c.createdAt &&
+                !conflictPropertyKeys.includes(c.propertyKey),
+            ).map(c => this.state.columnMap.get(c.propertyKey)!);
+
+        const setClauses = updateCols.map(c => `${c.quotedDatabaseName} = EXCLUDED.${c.quotedDatabaseName}`);
+
+        return {
+            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ${setClauses.join(', ')} RETURNING *`,
+            params,
+        };
+    }
+
     public buildRemove(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
         return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
     }

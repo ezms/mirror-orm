@@ -419,6 +419,32 @@ export class Repository<T> {
         return this.updateById(record, pk, pkValue, [deletedAtCol]);
     }
 
+    public async upsert(entity: T, conflictKeys: Array<keyof T & string>, options?: { update?: Array<keyof T & string> }): Promise<T> {
+        const pk = this.primaryColumn();
+        const record = { ...(entity as Record<string, unknown>) };
+
+        if (pk.generation && pk.generation.strategy !== 'identity') {
+            if (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null) {
+                record[pk.propertyKey] = this.generatePk(pk.generation);
+            }
+        }
+
+        await this.runHooks(entity, this.state.metadata.hooks.beforeInsert);
+
+        const createdAtCol = this.state.cachedCreatedAtColumn;
+        const updatedAtCol = this.state.cachedUpdatedAtColumn;
+        if (createdAtCol && record[createdAtCol.propertyKey] == null) record[createdAtCol.propertyKey] = new Date();
+        if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
+
+        const { sql, params } = this.assembler.buildUpsert(record, conflictKeys, options?.update);
+        try {
+            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+            return this.captureSnapshot(this.state.hydrator(rows[0]));
+        } catch (error) {
+            throw new QueryError(sql, error, params);
+        }
+    }
+
     public async update(data: Partial<T>, where: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildUpdate(data, where);
         try {

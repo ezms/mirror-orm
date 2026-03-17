@@ -10,7 +10,9 @@ class PgTransactionRunner implements ITransactionRunner {
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
         const result = typeof input === 'string'
-            ? await this.client.query(input, params)
+            ? params && params.length > 0
+                ? await this.client.query(input, params)
+                : await this.client.query(input)
             : await this.client.query(input);
         return result.rows as Array<T>;
     }
@@ -51,7 +53,9 @@ export class PgAdapter implements IDriverAdapter {
         const sqlText = typeof input === 'string' ? input : input.text;
         try {
             const result = typeof input === 'string'
-                ? await this.pool.query(input, params)
+                ? params && params.length > 0
+                    ? await this.pool.query(input, params)
+                    : await this.pool.query(input)
                 : await this.pool.query(input);
             return result.rows as Array<T>;
         } catch (error) {

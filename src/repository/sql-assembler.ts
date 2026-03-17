@@ -59,7 +59,15 @@ export class SqlAssembler<T> {
         }
 
         const params: Array<unknown> = [];
-        let selectPart = mtoRelations.length > 0 ? this.state.qualifiedSelectClause : this.state.selectClause;
+        const qualified = mtoRelations.length > 0;
+        const baseSelect = options.select && options.select.length > 0
+            ? options.select
+                .map(key => this.state.columnMap.get(key))
+                .filter((c): c is NonNullable<typeof c> => c !== undefined)
+                .map(c => qualified ? `${this.state.quotedTableName}.${c.quotedDatabaseName}` : c.quotedDatabaseName)
+                .join(', ')
+            : qualified ? this.state.qualifiedSelectClause : this.state.selectClause;
+        let selectPart = baseSelect;
 
         if (mtoRelations.length > 0) {
             const joinCols = mtoRelations.flatMap(({ relatedState, prefix }) =>

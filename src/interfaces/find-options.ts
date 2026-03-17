@@ -7,4 +7,5 @@ export interface IFindOptions<T> {
     offset?: number;
     relations?: Array<keyof T & string>;
     withDeleted?: boolean;
+    select?: Array<keyof T & string>;
 }

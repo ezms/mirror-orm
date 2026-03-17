@@ -1,9 +1,23 @@
-import { Pool, PoolClient } from 'pg';
+import { Pool, PoolClient, types } from 'pg';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
 import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
+
+const RAW_STRING = (val: string) => val;
+const ARRAY_QUERY_TYPES = {
+    getTypeParser: (typeId: number, format?: 'text' | 'binary') => {
+        if (
+            typeId === types.builtins.TIMESTAMPTZ ||
+            typeId === types.builtins.TIMESTAMP ||
+            typeId === types.builtins.DATE ||
+            typeId === types.builtins.INTERVAL ||
+            typeId === 1231 || typeId === 1115 || typeId === 1185 || typeId === 1187 || typeId === 1182
+        ) return RAW_STRING;
+        return types.getTypeParser(typeId, format);
+    },
+};
 
 class PgTransactionRunner implements ITransactionRunner {
     constructor(private readonly client: PoolClient) {}
@@ -14,6 +28,14 @@ class PgTransactionRunner implements ITransactionRunner {
                 ? await this.client.query(input, params)
                 : await this.client.query(input)
             : await this.client.query(input);
+        return result.rows as Array<T>;
+    }
+
+    public async queryArray<T extends unknown[] = unknown[]>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+        const config = typeof input === 'string'
+            ? { text: input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES, ...(params && params.length > 0 ? { values: params } : {}) }
+            : { ...input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES };
+        const result = await this.client.query(config);
         return result.rows as Array<T>;
     }
 
@@ -57,6 +79,20 @@ export class PgAdapter implements IDriverAdapter {
                     ? await this.pool.query(input, params)
                     : await this.pool.query(input)
                 : await this.pool.query(input);
+            return result.rows as Array<T>;
+        } catch (error) {
+            throw new QueryError(sqlText, error);
+        }
+    }
+
+    public async queryArray<T extends unknown[] = unknown[]>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+        if (!this.pool) throw new Error('Not connected');
+        const sqlText = typeof input === 'string' ? input : input.text;
+        try {
+            const config = typeof input === 'string'
+                ? { text: input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES, ...(params && params.length > 0 ? { values: params } : {}) }
+                : { ...input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES };
+            const result = await this.pool.query(config);
             return result.rows as Array<T>;
         } catch (error) {
             throw new QueryError(sqlText, error);

@@ -56,6 +56,13 @@ export class Repository<T> {
         return entities;
     }
 
+    private async hydrateArrayRows(rows: Array<unknown[]>): Promise<Array<T>> {
+        const entities = rows.map(row => this.captureSnapshot(this.state.arrayHydrator(row)));
+        if (this.state.hooks.afterLoad.length > 0)
+            for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
+        return entities;
+    }
+
     private captureSnapshot(entity: T): T {
         const cols = this.state.metadata.columns;
         const snap = new Array<unknown>(cols.length);
@@ -71,8 +78,13 @@ export class Repository<T> {
 
     public async findAll(): Promise<Array<T>> {
         const stmt = this.state.findAllStatement;
+        const runner = this.activeRunner;
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(stmt);
+            if (runner.queryArray) {
+                const rows = await runner.queryArray<unknown[]>(stmt);
+                return this.hydrateArrayRows(rows);
+            }
+            const rows = await runner.query<Record<string, unknown>>(stmt);
             return this.hydrateWithHooks(rows);
         } catch (error) {
             throw new QueryError(stmt.text, error, []);
@@ -82,8 +94,14 @@ export class Repository<T> {
     public async findById(id: number | string): Promise<T | null> {
         const stmt = this.state.findByIdStatement;
         if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
+        const runner = this.activeRunner;
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>({ ...stmt, values: [id] });
+            if (runner.queryArray) {
+                const rows = await runner.queryArray<unknown[]>({ ...stmt, values: [id] });
+                if (rows.length === 0) return null;
+                return (await this.hydrateArrayRows(rows))[0];
+            }
+            const rows = await runner.query<Record<string, unknown>>({ ...stmt, values: [id] });
             if (rows.length === 0) return null;
             return (await this.hydrateWithHooks(rows))[0];
         } catch (error) {
@@ -93,8 +111,19 @@ export class Repository<T> {
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         const plan = this.assembler.buildFind(options);
+        const runner = this.activeRunner;
+        const noRelations =
+            plan.mtoRelations.length === 0 &&
+            plan.otmRelations.length === 0 &&
+            plan.otoInverseRelations.length === 0 &&
+            plan.mtmRelations.length === 0;
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(plan.sql, plan.params);
+            if (noRelations && runner.queryArray) {
+                const rows = await runner.queryArray<unknown[]>(plan.sql, plan.params);
+                return this.hydrateArrayRows(rows);
+            }
+
+            const rows = await runner.query<Record<string, unknown>>(plan.sql, plan.params);
             const entities = this.hydrateMainRows(rows, plan);
 
             if (rows.length > 0) {

@@ -13,7 +13,11 @@ import { TransactionContext } from './transaction-context';
 export class Connection {
     private readonly repoCache = new Map<string, RepositoryState<unknown>>();
 
-    private constructor(private readonly options: IConnectionOptions) {}
+    private constructor(private readonly options: IConnectionOptions) {
+        if (options.adapter.queryArray) {
+            this.queryArray = (input, params) => options.adapter.queryArray!(input, params);
+        }
+    }
 
     public static async create(options: IConnectionOptions): Promise<Connection> {
         await options.adapter.connect(options);
@@ -31,6 +35,8 @@ export class Connection {
     public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
         return this.options.adapter.query<T>(sql, params);
     }
+
+    public queryArray?: IQueryRunner['queryArray'];
 
     public getRepository<T>(target: new () => T): Repository<T> {
         return new Repository(this.getOrCompile(target), this.withLogger(this));

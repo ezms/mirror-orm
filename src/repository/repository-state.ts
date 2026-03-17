@@ -29,6 +29,7 @@ export class RepositoryState<T> {
     public readonly qualifiedSelectClause: string;
     public readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
     public readonly hydrator: (row: Record<string, unknown>) => T;
+    public readonly arrayHydrator: (row: unknown[]) => T;
     public readonly findAllStatement: INamedQuery;
     public readonly findByIdStatement: INamedQuery | null;
     public readonly autoFkMap: Array<AutoFkEntry>;
@@ -54,6 +55,7 @@ export class RepositoryState<T> {
         this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
         this.hooks = metadata.hooks ?? { beforeInsert: [], beforeUpdate: [], afterLoad: [] };
         this.hydrator = this.buildHydrator();
+        this.arrayHydrator = this.buildArrayHydrator();
         this.autoFkMap = this.buildAutoFkMap();
         const sdFilter = this.cachedDeletedAtColumn
             ? ` WHERE ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
@@ -142,6 +144,34 @@ export class RepositoryState<T> {
             name: `mirror_${this.metadata.tableName}_fbi`,
             text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1${sdExtra}`,
         };
+    }
+
+    private buildArrayHydrator(): (row: unknown[]) => T {
+        let idx = 0;
+        const assignments = this.metadata.columns
+            .map(c => {
+                if (c.options.select === false) return '';
+                const i = idx++;
+                const prop = c.propertyKey;
+                const rhs = this.buildArrayCastExpression(i, c.options.type);
+                return `if(r[${i}]!==undefined&&r[${i}]!==null)i["${prop}"]=${rhs};`;
+            })
+            .join('');
+        const fn = new Function('C', 'H', `return function hydrateArray(r){var i=Object.create(C.prototype);${assignments}return i;}`);
+        return fn(this.target, HYDRATOR_HELPERS) as (row: unknown[]) => T;
+    }
+
+    private buildArrayCastExpression(idx: number, type: import('../interfaces/column-options').ColumnType | undefined): string {
+        const v = `r[${idx}]`;
+        switch (type) {
+            case 'number':   return `${v}!==null?+${v}:null`;
+            case 'bigint':   return `${v}!==null?BigInt(${v}):null`;
+            case 'boolean':  return `${v}!==null?Boolean(${v}):null`;
+            case 'datetime': return `${v}!==null?new Date(${v}):null`;
+            case 'date':     return `${v}!==null?H.dateOnly(${v}):null`;
+            case 'iso':      return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            default:         return v;
+        }
     }
 
     private buildHydrator(): (row: Record<string, unknown>) => T {

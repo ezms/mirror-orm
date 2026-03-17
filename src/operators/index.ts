@@ -3,3 +3,4 @@ export { MoreThan, MoreThanOrEqual, LessThan, LessThanOrEqual, Not, Between } fr
 export { Like, ILike } from './string';
 export { In } from './array';
 export { IsNull, IsNotNull } from './null';
+export { Raw } from './raw';

@@ -45,6 +45,7 @@ export {
     Not,
     IsNull,
     IsNotNull,
+    Raw,
 } from './operators';
 export type { IQueryOperator } from './operators';
 

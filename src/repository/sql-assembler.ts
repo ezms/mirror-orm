@@ -23,7 +23,7 @@ export type MtmInfo = {
     relatedState: RepositoryState<unknown>;
 };
 
-export type FindPlan<T> = {
+export type FindPlan = {
     sql: string;
     params: Array<unknown>;
     mtoRelations: Array<ManyToOneInfo>;
@@ -35,7 +35,7 @@ export type FindPlan<T> = {
 export class SqlAssembler<T> {
     constructor(private readonly state: RepositoryState<T>) {}
 
-    public buildFind(options: IFindOptions<T>): FindPlan<T> {
+    public buildFind(options: IFindOptions<T>): FindPlan {
         const mtoRelations: Array<ManyToOneInfo> = [];
         const otmRelations: Array<OtmInfo> = [];
         const otoInverseRelations: Array<OtmInfo> = [];
@@ -77,7 +77,13 @@ export class SqlAssembler<T> {
             sql += ` LEFT JOIN ${relatedState.quotedTableName} ON ${this.state.quotedTableName}."${relation.foreignKey}" = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName}`;
         }
 
-        sql += this.buildWhere(options.where, params);
+        let whereSql = this.buildWhere(options.where, params);
+        const sdCol = this.state.cachedDeletedAtColumn;
+        if (sdCol && !options.withDeleted) {
+            const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;
+            whereSql += whereSql ? ` AND ${sdClause}` : ` WHERE ${sdClause}`;
+        }
+        sql += whereSql;
 
         if (options.orderBy) {
             const orderClauses = Object.entries(options.orderBy)

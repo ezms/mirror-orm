@@ -7,4 +7,7 @@ export interface IColumnMetadata {
     options: IColumnOptions;
     primary: boolean;
     generation?: IGenerationOptions;
+    createdAt?: boolean;
+    updatedAt?: boolean;
+    deletedAt?: boolean;
 }

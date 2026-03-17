@@ -9,6 +9,9 @@ export { ManyToOne } from './decorators/many-to-one';
 export { ManyToMany } from './decorators/many-to-many';
 export { OneToMany } from './decorators/one-to-many';
 export { OneToOne } from './decorators/one-to-one';
+export { CreatedAt } from './decorators/created-at';
+export { UpdatedAt } from './decorators/updated-at';
+export { DeletedAt } from './decorators/deleted-at';
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';

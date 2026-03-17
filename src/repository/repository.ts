@@ -292,9 +292,12 @@ export class Repository<T> {
 
         const pk = this.primaryColumn();
         const pkValue = record[pk.propertyKey];
+        const createdAtCol = this.state.cachedCreatedAtColumn;
+        const updatedAtCol = this.state.cachedUpdatedAtColumn;
         let saved: T;
 
         if (typeof pkValue !== 'undefined' && pkValue !== null) {
+            if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
                 const dirtyColumns = this.state.metadata.columns.filter(
@@ -305,6 +308,8 @@ export class Repository<T> {
                 saved = await this.updateById(record, pk, pkValue);
             }
         } else {
+            if (createdAtCol) record[createdAtCol.propertyKey] = new Date();
+            if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             saved = await this.insert(record, pk);
         }
 
@@ -359,11 +364,17 @@ export class Repository<T> {
             }
         }
 
-        const sql = this.assembler.buildRemove(pk);
-        try {
-            await this.activeRunner.query(sql, [pkValue]);
-        } catch (error) {
-            throw new QueryError(sql, error, [pkValue]);
+        const deletedAtCol = this.state.cachedDeletedAtColumn;
+        if (deletedAtCol) {
+            (entity as Record<string, unknown>)[deletedAtCol.propertyKey] = new Date();
+            await this.updateById(entity as Record<string, unknown>, pk, pkValue, [deletedAtCol]);
+        } else {
+            const sql = this.assembler.buildRemove(pk);
+            try {
+                await this.activeRunner.query(sql, [pkValue]);
+            } catch (error) {
+                throw new QueryError(sql, error, [pkValue]);
+            }
         }
 
         for (const relation of this.state.metadata.relations) {
@@ -374,6 +385,17 @@ export class Repository<T> {
             const relatedState = this.state.getRelatedState(relation);
             await this.relatedRepo(relatedState).removeInternal(related as T, visited);
         }
+    }
+
+    public async softRestore(entity: T): Promise<T> {
+        const pk = this.primaryColumn();
+        const record = entity as Record<string, unknown>;
+        const pkValue = record[pk.propertyKey];
+        if (!pkValue) throw new MissingPrimaryKeyError(this.state.metadata.className, 'softRestore');
+        const deletedAtCol = this.state.cachedDeletedAtColumn;
+        if (!deletedAtCol) return entity;
+        record[deletedAtCol.propertyKey] = null;
+        return this.updateById(record, pk, pkValue, [deletedAtCol]);
     }
 
     public async update(data: Partial<T>, where: IFindOptions<T>['where']): Promise<number> {

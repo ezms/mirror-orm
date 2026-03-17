@@ -15,6 +15,9 @@ const HYDRATOR_HELPERS = Object.freeze({
 
 export class RepositoryState<T> {
     public readonly cachedPrimaryColumn: IColumnMetadata | null;
+    public readonly cachedCreatedAtColumn: IColumnMetadata | null;
+    public readonly cachedUpdatedAtColumn: IColumnMetadata | null;
+    public readonly cachedDeletedAtColumn: IColumnMetadata | null;
     public readonly quotedTableName: string;
     public readonly selectClause: string;
     public readonly qualifiedSelectClause: string;
@@ -37,9 +40,15 @@ export class RepositoryState<T> {
         this.columnMap = this.buildColumnMap();
         this.selectClause = this.buildSelectClause();
         this.qualifiedSelectClause = this.buildQualifiedSelectClause();
-        this.cachedPrimaryColumn = this.resolvePrimaryColumn();
+        this.cachedPrimaryColumn = this.metadata.columns.find(c => c.primary) ?? null;
+        this.cachedCreatedAtColumn = this.metadata.columns.find(c => c.createdAt) ?? null;
+        this.cachedUpdatedAtColumn = this.metadata.columns.find(c => c.updatedAt) ?? null;
+        this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
         this.hydrator = this.buildHydrator();
-        this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}` };
+        const sdFilter = this.cachedDeletedAtColumn
+            ? ` WHERE ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
+            : '';
+        this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${sdFilter}` };
         this.findByIdStatement = this.buildFindByIdStatement();
     }
 
@@ -94,16 +103,15 @@ export class RepositoryState<T> {
         return hydrator;
     }
 
-    private resolvePrimaryColumn(): IColumnMetadata | null {
-        return this.metadata.columns.find(c => c.primary) ?? null;
-    }
-
     private buildFindByIdStatement(): INamedQuery | null {
         if (!this.cachedPrimaryColumn) return null;
         const pk = this.columnMap.get(this.cachedPrimaryColumn.propertyKey)!;
+        const sdExtra = this.cachedDeletedAtColumn
+            ? ` AND ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
+            : '';
         return {
             name: `mirror_${this.metadata.tableName}_fbi`,
-            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1${sdExtra}`,
         };
     }
 

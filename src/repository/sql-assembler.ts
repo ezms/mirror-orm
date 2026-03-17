@@ -135,7 +135,7 @@ export class SqlAssembler<T> {
     }
 
     public buildBulkInsert(records: Record<string, unknown>[], isIdentity: boolean): { sql: string; params: Array<unknown> } {
-        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && records[0][c.propertyKey] !== undefined);
+        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && records.some(r => r[c.propertyKey] !== undefined));
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const allParams: Array<unknown> = [];
         const rowPlaceholders = records.map(record => {

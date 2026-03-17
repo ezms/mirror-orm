@@ -33,6 +33,7 @@ export class RepositoryState<T> {
     public readonly findByIdStatement: INamedQuery | null;
     public readonly autoFkMap: Array<AutoFkEntry>;
     public readonly metadata: IEntityMetadata;
+    public readonly hooks: Required<IEntityMetadata>['hooks'];
     public readonly target: new () => T;
 
     private readonly dialect: IDialect;
@@ -51,6 +52,7 @@ export class RepositoryState<T> {
         this.cachedCreatedAtColumn = this.metadata.columns.find(c => c.createdAt) ?? null;
         this.cachedUpdatedAtColumn = this.metadata.columns.find(c => c.updatedAt) ?? null;
         this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
+        this.hooks = metadata.hooks ?? { beforeInsert: [], beforeUpdate: [], afterLoad: [] };
         this.hydrator = this.buildHydrator();
         this.autoFkMap = this.buildAutoFkMap();
         const sdFilter = this.cachedDeletedAtColumn

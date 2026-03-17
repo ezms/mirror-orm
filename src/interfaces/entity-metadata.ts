@@ -7,5 +7,5 @@ export interface IEntityMetadata {
     className: string;
     columns: Array<IColumnMetadata>;
     relations: Array<IRelationMetadata>;
-    hooks: IEntityHooks;
+    hooks?: IEntityHooks;
 }

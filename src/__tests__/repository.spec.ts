@@ -436,7 +436,6 @@ describe('Repository<UserFixture> (identity PK)', () => {
             className: 'Orphan',
             columns: [{ propertyKey: 'name', databaseName: 'name', options: {}, primary: false }],
             relations: [],
-            hooks: { beforeInsert: [], beforeUpdate: [], afterLoad: [] },
         };
 
         it('throws NoPrimaryColumnError on findById', async () => {
@@ -605,7 +604,6 @@ describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
             { propertyKey: 'seq', databaseName: 'seq', options: { type: 'bigint' }, primary: false },
         ],
         relations: [],
-        hooks: { beforeInsert: [], beforeUpdate: [], afterLoad: [] },
     };
 
     class Sequence { id!: number; seq!: bigint; }
@@ -667,7 +665,6 @@ describe("type: 'iso' — TIMESTAMP → UTC ISO string", () => {
             { propertyKey: 'occurredAt', databaseName: 'occurred_at', options: { type: 'iso' },   primary: false },
         ],
         relations: [],
-        hooks: { beforeInsert: [], beforeUpdate: [], afterLoad: [] },
     };
     class Event { id!: number; occurredAt!: string; }
 
@@ -715,7 +712,6 @@ describe("type: 'date' — DATE → YYYY-MM-DD string (no time, no timezone shif
             { propertyKey: 'birthDate', databaseName: 'birth_date', options: { type: 'date' }, primary: false },
         ],
         relations: [],
-        hooks: { beforeInsert: [], beforeUpdate: [], afterLoad: [] },
     };
     class Profile { id!: number; birthDate!: string; }
 

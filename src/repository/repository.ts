@@ -42,13 +42,15 @@ export class Repository<T> {
     }
 
     private async runHooks(entity: T, methods: Array<string>): Promise<void> {
-        for (const method of methods) await ((entity as Record<string, unknown>)[method] as Function)?.();
+        const rec = entity as Record<string, unknown>;
+        for (const method of methods)
+            if (typeof rec[method] === 'function') await (rec[method] as () => Promise<void>)();
     }
 
     private async hydrateWithHooks(rows: Array<Record<string, unknown>>): Promise<Array<T>> {
         const entities = rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
-        if (this.state.metadata.hooks.afterLoad.length > 0)
-            for (const entity of entities) await this.runHooks(entity, this.state.metadata.hooks.afterLoad);
+        if (this.state.hooks.afterLoad.length > 0)
+            for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
         return entities;
     }
 
@@ -109,8 +111,8 @@ export class Repository<T> {
                 }
             }
 
-            if (this.state.metadata.hooks.afterLoad.length > 0)
-                for (const entity of entities) await this.runHooks(entity, this.state.metadata.hooks.afterLoad);
+            if (this.state.hooks.afterLoad.length > 0)
+                for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
 
             return entities;
         } catch (error) {
@@ -224,14 +226,20 @@ export class Repository<T> {
         if (entities.length === 0) return [];
         const pk = this.primaryColumn();
         const isIdentity = pk.generation?.strategy === 'identity';
-        const records = entities.map(e => ({ ...(e as Record<string, unknown>) }));
+        const createdAtCol = this.state.cachedCreatedAtColumn;
+        const updatedAtCol = this.state.cachedUpdatedAtColumn;
 
-        if (!isIdentity && pk.generation) {
-            for (const record of records) {
-                if (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null) {
-                    record[pk.propertyKey] = this.generatePk(pk.generation);
-                }
-            }
+        const records: Array<Record<string, unknown>> = [];
+        for (const entity of entities) {
+            await this.runHooks(entity, this.state.hooks.beforeInsert);
+            const record = { ...(entity as Record<string, unknown>) };
+            this.applyAutoFkMapping(record);
+            if (!isIdentity && pk.generation &&
+                (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null))
+                record[pk.propertyKey] = this.generatePk(pk.generation);
+            if (createdAtCol) record[createdAtCol.propertyKey] = new Date();
+            if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
+            records.push(record);
         }
 
         const { sql, params } = this.assembler.buildBulkInsert(records, isIdentity);
@@ -332,7 +340,7 @@ export class Repository<T> {
         let saved: T;
 
         if (typeof pkValue !== 'undefined' && pkValue !== null) {
-            await this.runHooks(entity, this.state.metadata.hooks.beforeUpdate);
+            await this.runHooks(entity, this.state.hooks.beforeUpdate);
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
@@ -344,7 +352,7 @@ export class Repository<T> {
                 saved = await this.updateById(record, pk, pkValue);
             }
         } else {
-            await this.runHooks(entity, this.state.metadata.hooks.beforeInsert);
+            await this.runHooks(entity, this.state.hooks.beforeInsert);
             if (createdAtCol) record[createdAtCol.propertyKey] = new Date();
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             saved = await this.insert(record, pk);
@@ -445,7 +453,7 @@ export class Repository<T> {
             }
         }
 
-        await this.runHooks(entity, this.state.metadata.hooks.beforeInsert);
+        await this.runHooks(entity, this.state.hooks.beforeInsert);
 
         const createdAtCol = this.state.cachedCreatedAtColumn;
         const updatedAtCol = this.state.cachedUpdatedAtColumn;

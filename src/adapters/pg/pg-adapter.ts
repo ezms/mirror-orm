@@ -34,13 +34,14 @@ export class PgAdapter implements IDriverAdapter {
     public async connect(options: IConnectionOptions): Promise<void> {
         this.pool = new Pool(
             options.url
-                ? { connectionString: options.url }
+                ? { connectionString: options.url, ssl: options.ssl }
                 : {
                     host: options.host,
                     port: options.port,
                     database: options.database,
                     user: options.user,
                     password: options.password,
+                    ssl: options.ssl,
                 },
         );
     }

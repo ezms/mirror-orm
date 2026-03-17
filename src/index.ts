@@ -19,7 +19,7 @@ export { AfterLoad } from './decorators/after-load';
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';
 export { TransactionContext } from './connection/transaction-context';
-export type { IConnectionOptions, IConnectionConfig } from './connection/connection-options';
+export type { IConnectionOptions, IConnectionConfig, ISslOptions } from './connection/connection-options';
 
 // ─── Adapters ─────────────────────────────────────────────────────────────────
 export { PgAdapter } from './adapters/pg/pg-adapter';

@@ -9,7 +9,7 @@ import { generateCuid2, generateUlid, generateUuidV4, generateUuidV7 } from '../
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
 import { RepositoryState } from './repository-state';
-import { SqlAssembler } from './sql-assembler';
+import { SqlAssembler, FindPlan, OtmInfo, MtmInfo } from './sql-assembler';
 
 export { RepositoryState } from './repository-state';
 
@@ -91,74 +91,16 @@ export class Repository<T> {
         const plan = this.assembler.buildFind(options);
         try {
             const rows = await this.activeRunner.query<Record<string, unknown>>(plan.sql, plan.params);
-
-            const entities = rows.map(row => {
-                const entity = this.captureSnapshot(this.state.hydrator(row)) as Record<string, unknown>;
-                for (const mto of plan.mtoRelations) {
-                    const pkRowKey = `${mto.prefix}${mto.pkDbName}`;
-                    entity[mto.relation.propertyKey] = row[pkRowKey] !== null && row[pkRowKey] !== undefined
-                        ? mto.prefixedHydrator(row)
-                        : null;
-                }
-                return entity as T;
-            });
+            const entities = this.hydrateMainRows(rows, plan);
 
             if (rows.length > 0) {
                 const mainPkDbName = this.state.cachedPrimaryColumn!.databaseName;
                 const mainIds = rows.map(row => row[mainPkDbName]);
-
-                for (const { relation, relatedState } of plan.otmRelations) {
-                    const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
-                    const relRows = await this.activeRunner.query<Record<string, unknown>>(fkSql, [mainIds]);
-
-                    const grouped = new Map<unknown, Array<unknown>>();
-                    for (const relRow of relRows) {
-                        const fkVal = relRow[relation.foreignKey];
-                        if (!grouped.has(fkVal)) grouped.set(fkVal, []);
-                        grouped.get(fkVal)!.push(relatedState.hydrator(relRow));
-                    }
-
-                    for (let i = 0; i < entities.length; i++) {
-                        const pkVal = rows[i][mainPkDbName];
-                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? [];
-                    }
-                }
-
-                for (const { relation, relatedState } of plan.otoInverseRelations) {
-                    const fkSql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
-                    const relRows = await this.activeRunner.query<Record<string, unknown>>(fkSql, [mainIds]);
-
-                    const grouped = new Map<unknown, unknown>();
-                    for (const relRow of relRows) {
-                        const fkVal = relRow[relation.foreignKey];
-                        grouped.set(fkVal, relatedState.hydrator(relRow));
-                    }
-
-                    for (let i = 0; i < entities.length; i++) {
-                        const pkVal = rows[i][mainPkDbName];
-                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? null;
-                    }
-                }
-
-                for (const { relation, relatedState } of plan.mtmRelations) {
-                    const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
-                    const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
-                    const ownerAlias = '_mirror_mtm_fk_';
-                    const mtmSql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY($1)`;
-                    const relRows = await this.activeRunner.query<Record<string, unknown>>(mtmSql, [mainIds]);
-
-                    const grouped = new Map<unknown, Array<unknown>>();
-                    for (const relRow of relRows) {
-                        const ownerFkVal = relRow[ownerAlias];
-                        if (!grouped.has(ownerFkVal)) grouped.set(ownerFkVal, []);
-                        grouped.get(ownerFkVal)!.push(relatedState.hydrator(relRow));
-                    }
-
-                    for (let i = 0; i < entities.length; i++) {
-                        const pkVal = rows[i][mainPkDbName];
-                        (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(pkVal) ?? [];
-                    }
-                }
+                await Promise.all([
+                    ...plan.otmRelations.map(r => this.loadOtmRelation(entities, rows, mainPkDbName, mainIds, r)),
+                    ...plan.otoInverseRelations.map(r => this.loadOtoInverseRelation(entities, rows, mainPkDbName, mainIds, r)),
+                    ...plan.mtmRelations.map(r => this.loadMtmRelation(entities, rows, mainPkDbName, mainIds, r)),
+                ]);
             }
 
             if (this.state.metadata.hooks.afterLoad.length > 0)
@@ -168,6 +110,75 @@ export class Repository<T> {
         } catch (error) {
             throw new QueryError(plan.sql, error, plan.params);
         }
+    }
+
+    private hydrateMainRows(rows: Array<Record<string, unknown>>, plan: FindPlan): Array<T> {
+        return rows.map(row => {
+            const entity = this.captureSnapshot(this.state.hydrator(row)) as Record<string, unknown>;
+            for (const mto of plan.mtoRelations) {
+                const pkRowKey = `${mto.prefix}${mto.pkDbName}`;
+                entity[mto.relation.propertyKey] = row[pkRowKey] !== null && row[pkRowKey] !== undefined
+                    ? mto.prefixedHydrator(row)
+                    : null;
+            }
+            return entity as T;
+        });
+    }
+
+    private async loadOtmRelation(
+        entities: Array<T>,
+        rows: Array<Record<string, unknown>>,
+        mainPkDbName: string,
+        mainIds: Array<unknown>,
+        { relation, relatedState }: OtmInfo,
+    ): Promise<void> {
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const grouped = new Map<unknown, Array<unknown>>();
+        for (const relRow of relRows) {
+            const fkVal = relRow[relation.foreignKey];
+            if (!grouped.has(fkVal)) grouped.set(fkVal, []);
+            grouped.get(fkVal)!.push(relatedState.hydrator(relRow));
+        }
+        for (let i = 0; i < entities.length; i++)
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? [];
+    }
+
+    private async loadOtoInverseRelation(
+        entities: Array<T>,
+        rows: Array<Record<string, unknown>>,
+        mainPkDbName: string,
+        mainIds: Array<unknown>,
+        { relation, relatedState }: OtmInfo,
+    ): Promise<void> {
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const grouped = new Map<unknown, unknown>();
+        for (const relRow of relRows) grouped.set(relRow[relation.foreignKey], relatedState.hydrator(relRow));
+        for (let i = 0; i < entities.length; i++)
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? null;
+    }
+
+    private async loadMtmRelation(
+        entities: Array<T>,
+        rows: Array<Record<string, unknown>>,
+        mainPkDbName: string,
+        mainIds: Array<unknown>,
+        { relation, relatedState }: MtmInfo,
+    ): Promise<void> {
+        const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
+        const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
+        const ownerAlias = '_mirror_mtm_fk_';
+        const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY($1)`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const grouped = new Map<unknown, Array<unknown>>();
+        for (const relRow of relRows) {
+            const ownerFkVal = relRow[ownerAlias];
+            if (!grouped.has(ownerFkVal)) grouped.set(ownerFkVal, []);
+            grouped.get(ownerFkVal)!.push(relatedState.hydrator(relRow));
+        }
+        for (let i = 0; i < entities.length; i++)
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? [];
     }
 
     public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {
@@ -272,16 +283,11 @@ export class Repository<T> {
     }
 
     private applyAutoFkMapping(record: Record<string, unknown>): void {
-        for (const relation of this.state.metadata.relations) {
-            if (!this.isMtoOrOtoOwner(relation)) continue;
-            const related = record[relation.propertyKey];
+        for (const { relationPropertyKey, fkPropertyKey, relatedPkPropertyKey } of this.state.autoFkMap) {
+            const related = record[relationPropertyKey];
             if (!related || typeof related !== 'object') continue;
-            const fkCol = this.state.metadata.columns.find(c => c.databaseName === relation.foreignKey);
-            if (!fkCol) continue;
-            const pkVal = (related as Record<string, unknown>)[
-                this.state.getRelatedState(relation).cachedPrimaryColumn?.propertyKey ?? ''
-            ];
-            if (pkVal != null) record[fkCol.propertyKey] = pkVal;
+            const pkVal = (related as Record<string, unknown>)[relatedPkPropertyKey];
+            if (pkVal != null) record[fkPropertyKey] = pkVal;
         }
     }
 

@@ -5,6 +5,12 @@ import { IRelationMetadata } from '../interfaces/relation-metadata';
 import { registry } from '../metadata/registry';
 import { INamedQuery } from '../interfaces/query-runner';
 
+export type AutoFkEntry = {
+    relationPropertyKey: string;
+    fkPropertyKey: string;
+    relatedPkPropertyKey: string;
+};
+
 const HYDRATOR_HELPERS = Object.freeze({
     dateOnly: (v: Date): string => {
         const m = String(v.getMonth() + 1).padStart(2, '0');
@@ -25,6 +31,7 @@ export class RepositoryState<T> {
     public readonly hydrator: (row: Record<string, unknown>) => T;
     public readonly findAllStatement: INamedQuery;
     public readonly findByIdStatement: INamedQuery | null;
+    public readonly autoFkMap: Array<AutoFkEntry>;
     public readonly metadata: IEntityMetadata;
     public readonly target: new () => T;
 
@@ -45,6 +52,7 @@ export class RepositoryState<T> {
         this.cachedUpdatedAtColumn = this.metadata.columns.find(c => c.updatedAt) ?? null;
         this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
         this.hydrator = this.buildHydrator();
+        this.autoFkMap = this.buildAutoFkMap();
         const sdFilter = this.cachedDeletedAtColumn
             ? ` WHERE ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
             : '';
@@ -105,6 +113,21 @@ export class RepositoryState<T> {
         const hydrator = fn(this.target, HYDRATOR_HELPERS) as (row: Record<string, unknown>) => T;
         this.prefixedHydratorCache.set(prefix, hydrator);
         return hydrator;
+    }
+
+    private buildAutoFkMap(): Array<AutoFkEntry> {
+        return this.metadata.relations.flatMap(r => {
+            const isOwner = r.type === 'many-to-one' ||
+                (r.type === 'one-to-one' && this.metadata.columns.some(c => c.databaseName === r.foreignKey));
+            if (!isOwner) return [];
+            const fkCol = this.metadata.columns.find(c => c.databaseName === r.foreignKey);
+            if (!fkCol) return [];
+            const relatedMeta = registry.getEntity((r.target() as new () => unknown).name);
+            if (!relatedMeta) return [];
+            const relatedPk = relatedMeta.columns.find(c => c.primary);
+            if (!relatedPk) return [];
+            return [{ relationPropertyKey: r.propertyKey, fkPropertyKey: fkCol.propertyKey, relatedPkPropertyKey: relatedPk.propertyKey }];
+        });
     }
 
     private buildFindByIdStatement(): INamedQuery | null {

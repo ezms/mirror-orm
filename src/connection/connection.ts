@@ -1,6 +1,7 @@
 import { PgAdapter } from '../adapters/pg/pg-adapter';
+import { SqliteAdapter } from '../adapters/sqlite/sqlite-adapter';
 import { transactionStore } from '../context/transaction-store';
-import { PostgresDialect } from '../dialects';
+import { PostgresDialect, SQLiteDialect } from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
@@ -29,6 +30,10 @@ export class Connection {
 
     public static async postgres(config: IConnectionConfig): Promise<Connection> {
         return Connection.create({ ...config, adapter: new PgAdapter(), dialect: new PostgresDialect() });
+    }
+
+    public static async sqlite(config: IConnectionConfig): Promise<Connection> {
+        return Connection.create({ ...config, adapter: new SqliteAdapter(), dialect: new SQLiteDialect() });
     }
 
     public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {

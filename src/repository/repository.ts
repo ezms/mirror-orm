@@ -180,8 +180,10 @@ export class Repository<T> {
         mainIds: Array<unknown>,
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
-        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY(${relatedState.placeholder(1)})`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const otmParams: Array<unknown> = [];
+        const otmInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otmParams);
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otmInClause}`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, otmParams);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const fkVal = relRow[relation.foreignKey];
@@ -199,8 +201,10 @@ export class Repository<T> {
         mainIds: Array<unknown>,
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
-        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY(${relatedState.placeholder(1)})`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const otoParams: Array<unknown> = [];
+        const otoInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otoParams);
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otoInClause}`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, otoParams);
         const grouped = new Map<unknown, unknown>();
         for (const relRow of relRows) grouped.set(relRow[relation.foreignKey], relatedState.hydrator(relRow));
         for (let i = 0; i < entities.length; i++)
@@ -217,8 +221,10 @@ export class Repository<T> {
         const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
         const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
         const ownerAlias = '_mirror_mtm_fk_';
-        const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY(${relatedState.placeholder(1)})`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
+        const mtmParams: Array<unknown> = [];
+        const mtmInClause = relatedState.buildArrayInClause(`${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)}`, mainIds, mtmParams);
+        const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${mtmInClause}`;
+        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, mtmParams);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const ownerFkVal = relRow[ownerAlias];
@@ -303,8 +309,23 @@ export class Repository<T> {
 
         const { sql, params } = this.assembler.buildBulkInsert(records, isIdentity);
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+            if (this.state.supportsReturning) {
+                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+                return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+            }
+            if (isIdentity) {
+                return Promise.all(records.map(r => this.insert(r, pk)));
+            }
+            await this.activeRunner.query(sql, params);
+            const pkValues = records.map(r => r[pk.propertyKey]);
+            const pkCol = this.state.columnMap.get(pk.propertyKey)!;
+            const inParams: Array<unknown> = [];
+            const inClause = this.state.buildArrayInClause(pkCol.quotedDatabaseName, pkValues, inParams);
+            const loaded = await this.activeRunner.query<Record<string, unknown>>(
+                `SELECT ${this.state.selectClause} FROM ${this.state.quotedTableName} WHERE ${inClause}`,
+                inParams,
+            );
+            return loaded.map(row => this.captureSnapshot(this.state.hydrator(row)));
         } catch (error) {
             throw new QueryError(sql, error, params);
         }
@@ -319,11 +340,11 @@ export class Repository<T> {
             throw new MissingPrimaryKeyError(this.state.metadata.className, 'removeMany');
         }
 
-        const sql = this.assembler.buildRemoveMany(pk);
+        const { sql, params } = this.assembler.buildRemoveMany(pk, ids);
         try {
-            await this.activeRunner.query(sql, [ids]);
+            await this.activeRunner.query(sql, params);
         } catch (error) {
-            throw new QueryError(sql, error, [ids]);
+            throw new QueryError(sql, error, params);
         }
     }
 
@@ -555,8 +576,19 @@ export class Repository<T> {
         }
         const { sql, params } = this.assembler.buildInsert(record, isIdentity);
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return this.captureSnapshot(this.state.hydrator(rows[0]));
+            if (this.state.supportsReturning) {
+                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+                return this.captureSnapshot(this.state.hydrator(rows[0]));
+            }
+            await this.activeRunner.query(sql, params);
+            let pkValue = record[pk.propertyKey];
+            if (isIdentity) {
+                const lidQuery = this.state.lastInsertIdQuery!;
+                const lidRows = await this.activeRunner.query<Record<string, unknown>>(lidQuery);
+                pkValue = lidRows[0]['_lid'];
+            }
+            const entity = await this.findById(pkValue as string | number);
+            return entity!;
         } catch (error) {
             throw new QueryError(sql, error, params);
         }
@@ -565,8 +597,13 @@ export class Repository<T> {
     private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): Promise<T> {
         const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns);
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-            return this.captureSnapshot(this.state.hydrator(rows[0]));
+            if (this.state.supportsReturning) {
+                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+                return this.captureSnapshot(this.state.hydrator(rows[0]));
+            }
+            await this.activeRunner.query(sql, params);
+            const entity = await this.findById(pkValue as string | number);
+            return entity!;
         } catch (error) {
             throw new QueryError(sql, error, params);
         }

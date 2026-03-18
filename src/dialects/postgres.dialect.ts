@@ -10,4 +10,9 @@ export class PostgresDialect implements IDialect {
     public placeholder(index: number): string {
         return `$${index}`;
     }
+
+    public buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string {
+        params.push(ids);
+        return `${quotedColumn} = ANY(${this.placeholder(params.length)})`;
+    }
 }

@@ -131,7 +131,7 @@ export class SqlAssembler<T> {
         const params = columns.map(c => record[c.propertyKey]);
         const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
         return {
-            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
+            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')})${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }
@@ -148,7 +148,7 @@ export class SqlAssembler<T> {
             return `(${placeholders.join(', ')})`;
         });
         return {
-            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES ${rowPlaceholders.join(', ')} RETURNING *`,
+            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES ${rowPlaceholders.join(', ')}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params: allParams,
         };
     }
@@ -158,7 +158,7 @@ export class SqlAssembler<T> {
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(i + 1)}`);
         const params = [...columns.map(c => record[c.propertyKey]), pkValue];
         return {
-            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)} RETURNING *`,
+            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }
@@ -174,7 +174,7 @@ export class SqlAssembler<T> {
         });
         const whereSql = this.buildWhere(where, params);
         return {
-            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')}${whereSql} RETURNING 1`,
+            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')}${whereSql}${this.state.supportsReturning ? ' RETURNING 1' : ''}`,
             params,
         };
     }
@@ -182,7 +182,7 @@ export class SqlAssembler<T> {
     public buildDelete(where: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
         return {
-            sql: `DELETE FROM ${this.state.quotedTableName}${this.buildWhere(where, params)} RETURNING 1`,
+            sql: `DELETE FROM ${this.state.quotedTableName}${this.buildWhere(where, params)}${this.state.supportsReturning ? ' RETURNING 1' : ''}`,
             params,
         };
     }
@@ -216,7 +216,7 @@ export class SqlAssembler<T> {
         const setClauses = updateCols.map(c => `${c.quotedDatabaseName} = EXCLUDED.${c.quotedDatabaseName}`);
 
         return {
-            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ${setClauses.join(', ')} RETURNING *`,
+            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT (${conflictCols.join(', ')}) DO UPDATE SET ${setClauses.join(', ')}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }
@@ -225,8 +225,10 @@ export class SqlAssembler<T> {
         return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(1)}`;
     }
 
-    public buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
-        return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY(${this.state.placeholder(1)})`;
+    public buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }, ids: Array<unknown>): { sql: string; params: Array<unknown> } {
+        const params: Array<unknown> = [];
+        const inClause = this.state.buildArrayInClause(pk.quotedDatabaseName, ids, params);
+        return { sql: `DELETE FROM ${this.state.quotedTableName} WHERE ${inClause}`, params };
     }
 
     private buildMtoInfo(relation: IRelationMetadata, relatedState: RepositoryState<unknown>): ManyToOneInfo {

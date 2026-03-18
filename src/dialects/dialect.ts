@@ -25,4 +25,22 @@ export interface IDialect {
      * PostgreSQL: true. MySQL, SQLite (< 3.35), SQL Server: false.
      */
     readonly supportsReturning: boolean;
+
+    /**
+     * SQL to retrieve the last auto-generated row ID after an INSERT.
+     * Only required when supportsReturning is false and identity strategy is used.
+     *
+     * SQLite: 'SELECT last_insert_rowid() AS _lid'
+     * MySQL:  'SELECT LAST_INSERT_ID() AS _lid'
+     * PostgreSQL: undefined (uses RETURNING)
+     */
+    readonly lastInsertIdQuery?: string;
+
+    /**
+     * Builds an IN/ANY clause for an array of values, adapting to the dialect.
+     *
+     * PostgreSQL: pushes the array as a single param → "col = ANY($N)"
+     * Others: pushes each value individually → "col IN (?, ?, ?)"
+     */
+    buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string;
 }

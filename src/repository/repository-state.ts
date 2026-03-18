@@ -76,6 +76,14 @@ export class RepositoryState<T> {
         return this.dialect.supportsReturning;
     }
 
+    public get lastInsertIdQuery(): string | undefined {
+        return this.dialect.lastInsertIdQuery;
+    }
+
+    public buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string {
+        return this.dialect.buildArrayInClause(quotedColumn, ids, params);
+    }
+
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
         return new Map(
             this.metadata.columns.map(c => [
@@ -150,7 +158,7 @@ export class RepositoryState<T> {
             : '';
         return {
             name: `mirror_${this.metadata.tableName}_fbi`,
-            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1${sdExtra}`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = ${this.placeholder(1)}${sdExtra}`,
         };
     }
 

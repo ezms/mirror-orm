@@ -23,10 +23,11 @@ export type { IConnectionOptions, IConnectionConfig, ISslOptions } from './conne
 
 // ─── Adapters ─────────────────────────────────────────────────────────────────
 export { PgAdapter } from './adapters/pg/pg-adapter';
+export { SqliteAdapter } from './adapters/sqlite/sqlite-adapter';
 export type { IDriverAdapter } from './adapters/adapter';
 
 // ─── Dialects ─────────────────────────────────────────────────────────────────
-export { PostgresDialect } from './dialects';
+export { PostgresDialect, SQLiteDialect } from './dialects';
 export type { IDialect } from './dialects';
 
 // ─── Repository ───────────────────────────────────────────────────────────────

@@ -16,4 +16,11 @@ export class PostgresDialect implements IDialect {
         params.push(ids);
         return `${quotedColumn} = ANY(${this.placeholder(params.length)})`;
     }
+
+    public buildLimitOffset(_hasOrderBy: boolean, limit?: number, offset?: number): string {
+        let sql = '';
+        if (limit !== undefined) sql += ` LIMIT ${limit}`;
+        if (offset !== undefined) sql += ` OFFSET ${offset}`;
+        return sql;
+    }
 }

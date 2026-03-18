@@ -92,6 +92,10 @@ export class RepositoryState<T> {
         return this.dialect.buildArrayInClause(quotedColumn, ids, params);
     }
 
+    public buildLimitOffset(hasOrderBy: boolean, limit?: number, offset?: number): string {
+        return this.dialect.buildLimitOffset(hasOrderBy, limit, offset);
+    }
+
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
         return new Map(
             this.metadata.columns.map(c => [

@@ -17,4 +17,11 @@ export class MySQLDialect implements IDialect {
         const placeholders = ids.map(() => '?').join(', ');
         return `${quotedColumn} IN (${placeholders})`;
     }
+
+    public buildLimitOffset(_hasOrderBy: boolean, limit?: number, offset?: number): string {
+        let sql = '';
+        if (limit !== undefined) sql += ` LIMIT ${limit}`;
+        if (offset !== undefined) sql += ` OFFSET ${offset}`;
+        return sql;
+    }
 }

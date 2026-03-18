@@ -57,4 +57,13 @@ export interface IDialect {
      * Others: pushes each value individually → "col IN (?, ?, ?)"
      */
     buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string;
+
+    /**
+     * Returns the SQL fragment to append for LIMIT/OFFSET pagination.
+     *
+     * PostgreSQL/MySQL/SQLite: "LIMIT n" / "OFFSET m"
+     * SQL Server:              "ORDER BY (SELECT NULL) OFFSET m ROWS FETCH NEXT n ROWS ONLY"
+     *                          (when hasOrderBy is true, skips the ORDER BY prefix)
+     */
+    buildLimitOffset(hasOrderBy: boolean, limit?: number, offset?: number): string;
 }

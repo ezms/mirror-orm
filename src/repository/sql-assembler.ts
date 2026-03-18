@@ -93,6 +93,7 @@ export class SqlAssembler<T> {
         }
         sql += whereSql;
 
+        let hasOrderBy = false;
         if (options.orderBy) {
             const orderClauses = Object.entries(options.orderBy)
                 .map(([key, direction]) => {
@@ -100,11 +101,13 @@ export class SqlAssembler<T> {
                     return column ? `${column.quotedDatabaseName} ${direction}` : null;
                 })
                 .filter((clause): clause is string => clause !== null);
-            if (orderClauses.length > 0) sql += ` ORDER BY ${orderClauses.join(', ')}`;
+            if (orderClauses.length > 0) {
+                sql += ` ORDER BY ${orderClauses.join(', ')}`;
+                hasOrderBy = true;
+            }
         }
 
-        if (options.limit !== undefined) sql += ` LIMIT ${options.limit}`;
-        if (options.offset !== undefined) sql += ` OFFSET ${options.offset}`;
+        sql += this.state.buildLimitOffset(hasOrderBy, options.limit, options.offset);
         if (options.lock === 'pessimistic_write') sql += ' FOR UPDATE';
         if (options.lock === 'pessimistic_read')  sql += ' FOR SHARE';
 

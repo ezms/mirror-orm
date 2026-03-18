@@ -19,4 +19,14 @@ export class MssqlDialect implements IDialect {
         });
         return `${quotedColumn} IN (${placeholders.join(', ')})`;
     }
+
+    public buildLimitOffset(hasOrderBy: boolean, limit?: number, offset?: number): string {
+        if (limit === undefined && offset === undefined) return '';
+        const off = offset ?? 0;
+        const orderPrefix = hasOrderBy ? '' : ' ORDER BY (SELECT NULL)';
+        if (limit !== undefined) {
+            return `${orderPrefix} OFFSET ${off} ROWS FETCH NEXT ${limit} ROWS ONLY`;
+        }
+        return `${orderPrefix} OFFSET ${off} ROWS`;
+    }
 }

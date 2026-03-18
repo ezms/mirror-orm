@@ -9,8 +9,19 @@ export interface ISslOptions {
     key?: string;
 }
 
+export type IReplicaConfig = {
+    url?: string;
+    host?: string;
+    port?: number;
+    database?: string;
+    user?: string;
+    password?: string;
+    ssl?: boolean | ISslOptions;
+};
+
 export interface IConnectionOptions {
     adapter: IDriverAdapter;
+    replicaAdapter?: IDriverAdapter;
     dialect?: IDialect;
     url?: string;
     host?: string;
@@ -22,4 +33,6 @@ export interface IConnectionOptions {
     logger?: ILogger;
 }
 
-export type IConnectionConfig = Omit<IConnectionOptions, 'adapter'>;
+export type IConnectionConfig = Omit<IConnectionOptions, 'adapter' | 'replicaAdapter'> & {
+    replica?: IReplicaConfig;
+};

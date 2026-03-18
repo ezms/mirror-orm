@@ -262,6 +262,9 @@ export class SqlAssembler<T> {
             const column = this.state.columnMap.get(key);
             if (!column) continue;
             if (isOperator(value)) {
+                if (value.requiresJsonSupport && !this.state.supportsJsonOperators) {
+                    throw new Error(`JSON operators are only supported on PostgreSQL. The current dialect does not support JSON operators.`);
+                }
                 const { sql, params: opParams } = value.buildClause(column.quotedDatabaseName, params.length + 1, this.state.placeholder.bind(this.state));
                 clauses.push(sql);
                 params.push(...opParams);

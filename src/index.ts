@@ -19,7 +19,7 @@ export { AfterLoad } from './decorators/after-load';
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';
 export { TransactionContext } from './connection/transaction-context';
-export type { IConnectionOptions, IConnectionConfig, ISslOptions } from './connection/connection-options';
+export type { IConnectionOptions, IConnectionConfig, IReplicaConfig, ISslOptions } from './connection/connection-options';
 
 // ─── Adapters ─────────────────────────────────────────────────────────────────
 export { PostgresAdapter } from './adapters/pg/pg-adapter';
@@ -53,6 +53,10 @@ export {
     IsNull,
     IsNotNull,
     Raw,
+    JsonContains,
+    JsonHasKey,
+    JsonHasAllKeys,
+    JsonHasAnyKey,
 } from './operators';
 export type { IQueryOperator } from './operators';
 

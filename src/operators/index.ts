@@ -4,3 +4,4 @@ export { Like, ILike } from './string';
 export { In } from './array';
 export { IsNull, IsNotNull } from './null';
 export { Raw } from './raw';
+export { JsonContains, JsonHasKey, JsonHasAllKeys, JsonHasAnyKey } from './json';

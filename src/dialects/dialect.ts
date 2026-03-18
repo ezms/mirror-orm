@@ -34,6 +34,13 @@ export interface IDialect {
     readonly supportsOutputInserted?: boolean;
 
     /**
+     * Whether this dialect supports PostgreSQL JSON operators (@>, ?, ?&, ?|).
+     * PostgreSQL: true. All other dialects: false — using JSON operators on
+     * unsupported dialects throws at query-build time.
+     */
+    readonly supportsJsonOperators?: boolean;
+
+    /**
      * SQL to retrieve the last auto-generated row ID after an INSERT.
      * Only required when supportsReturning is false and identity strategy is used.
      *

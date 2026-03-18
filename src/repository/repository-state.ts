@@ -84,6 +84,10 @@ export class RepositoryState<T> {
         return this.dialect.supportsOutputInserted ?? false;
     }
 
+    public get supportsJsonOperators(): boolean {
+        return this.dialect.supportsJsonOperators ?? false;
+    }
+
     public buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string {
         return this.dialect.buildArrayInClause(quotedColumn, ids, params);
     }

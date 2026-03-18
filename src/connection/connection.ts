@@ -27,11 +27,17 @@ export class Connection {
 
     public static async create(options: IConnectionOptions): Promise<Connection> {
         await options.adapter.connect(options);
+        if (options.replicaAdapter) {
+            await options.replicaAdapter.connect(options);
+        }
         return new Connection(options);
     }
 
     public static async postgres(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new PostgresAdapter(), dialect: new PostgresDialect() });
+        const adapter = new PostgresAdapter();
+        const replicaAdapter = config.replica ? new PostgresAdapter() : undefined;
+        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
+        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new PostgresDialect() });
     }
 
     public static async sqlite(config: IConnectionConfig): Promise<Connection> {
@@ -39,11 +45,17 @@ export class Connection {
     }
 
     public static async mysql(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new MysqlAdapter(), dialect: new MySQLDialect() });
+        const adapter = new MysqlAdapter();
+        const replicaAdapter = config.replica ? new MysqlAdapter() : undefined;
+        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
+        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new MySQLDialect() });
     }
 
     public static async sqlServer(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new MssqlAdapter(), dialect: new MssqlDialect() });
+        const adapter = new MssqlAdapter();
+        const replicaAdapter = config.replica ? new MssqlAdapter() : undefined;
+        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
+        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new MssqlDialect() });
     }
 
     public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {
@@ -58,7 +70,10 @@ export class Connection {
     public queryStream?: IQueryRunner['queryStream'];
 
     public getRepository<T>(target: new () => T): Repository<T> {
-        return new Repository(this.getOrCompile(target), this.withLogger(this));
+        const replicaRunner = this.options.replicaAdapter
+            ? this.withLogger({ query: (sql, params) => this.options.replicaAdapter!.query(sql as string, params) })
+            : undefined;
+        return new Repository(this.getOrCompile(target), this.withLogger(this), true, replicaRunner);
     }
 
     private savepointCounter = 0;
@@ -116,6 +131,7 @@ export class Connection {
 
     public async disconnect(): Promise<void> {
         await this.options.adapter.disconnect();
+        await this.options.replicaAdapter?.disconnect();
     }
 
     private getOrCompile<T>(target: new () => T): RepositoryState<T> {

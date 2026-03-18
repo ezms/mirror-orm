@@ -18,15 +18,17 @@ export { RepositoryState } from './repository-state';
 export class Repository<T> {
     private readonly state: RepositoryState<T>;
     private readonly runner: IQueryRunner;
+    private readonly replicaRunner: IQueryRunner;
     private readonly assembler: SqlAssembler<T>;
     private readonly alsEnabled: boolean;
 
     constructor(target: new () => T, runner: IQueryRunner, metadata: IEntityMetadata);
-    constructor(state: RepositoryState<T>, runner: IQueryRunner, alsEnabled?: boolean);
+    constructor(state: RepositoryState<T>, runner: IQueryRunner, alsEnabled?: boolean, replicaRunner?: IQueryRunner);
     constructor(
         targetOrState: (new () => T) | RepositoryState<T>,
         runner: IQueryRunner,
         metadataOrAls?: IEntityMetadata | boolean,
+        replicaRunner?: IQueryRunner,
     ) {
         this.runner = runner;
         if (targetOrState instanceof RepositoryState) {
@@ -36,11 +38,16 @@ export class Repository<T> {
             this.state = new RepositoryState(targetOrState, metadataOrAls as IEntityMetadata);
             this.alsEnabled = true;
         }
+        this.replicaRunner = replicaRunner ?? runner;
         this.assembler = new SqlAssembler(this.state);
     }
 
     private get activeRunner(): IQueryRunner {
         return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.runner;
+    }
+
+    private get readRunner(): IQueryRunner {
+        return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.replicaRunner;
     }
 
     private async runHooks(entity: T, methods: Array<string>): Promise<void> {
@@ -78,7 +85,7 @@ export class Repository<T> {
 
     public async *findStream(options: IFindOptions<T> = {}): AsyncGenerator<T> {
         const plan = this.assembler.buildFind(options);
-        const runner = this.activeRunner;
+        const runner = this.readRunner;
         if (!runner.queryStream) throw new Error('queryStream is not supported by the current adapter');
         for await (const row of runner.queryStream(plan.sql, plan.params)) {
             yield this.captureSnapshot(this.state.arrayHydrator(row));
@@ -87,7 +94,7 @@ export class Repository<T> {
 
     public async findAll(): Promise<Array<T>> {
         const stmt = this.state.findAllStatement;
-        const runner = this.activeRunner;
+        const runner = this.readRunner;
         try {
             if (runner.queryArray) {
                 const rows = await runner.queryArray<unknown[]>(stmt);
@@ -103,7 +110,7 @@ export class Repository<T> {
     public async findById(id: number | string): Promise<T | null> {
         const stmt = this.state.findByIdStatement;
         if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
-        const runner = this.activeRunner;
+        const runner = this.readRunner;
         try {
             if (runner.queryArray) {
                 const rows = await runner.queryArray<unknown[]>({ ...stmt, values: [id] });
@@ -120,7 +127,7 @@ export class Repository<T> {
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         const plan = this.assembler.buildFind(options);
-        const runner = this.activeRunner;
+        const runner = this.readRunner;
         const noRelations =
             plan.mtoRelations.length === 0 &&
             plan.otmRelations.length === 0 &&
@@ -183,7 +190,7 @@ export class Repository<T> {
         const otmParams: Array<unknown> = [];
         const otmInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otmParams);
         const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otmInClause}`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, otmParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, otmParams);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const fkVal = relRow[relation.foreignKey];
@@ -204,7 +211,7 @@ export class Repository<T> {
         const otoParams: Array<unknown> = [];
         const otoInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otoParams);
         const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otoInClause}`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, otoParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, otoParams);
         const grouped = new Map<unknown, unknown>();
         for (const relRow of relRows) grouped.set(relRow[relation.foreignKey], relatedState.hydrator(relRow));
         for (let i = 0; i < entities.length; i++)
@@ -224,7 +231,7 @@ export class Repository<T> {
         const mtmParams: Array<unknown> = [];
         const mtmInClause = relatedState.buildArrayInClause(`${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)}`, mainIds, mtmParams);
         const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${mtmInClause}`;
-        const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, mtmParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, mtmParams);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const ownerFkVal = relRow[ownerAlias];
@@ -237,7 +244,7 @@ export class Repository<T> {
 
     public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {
         const { sql, params } = this.assembler.buildCount(options.where, options.withDeleted);
-        const countPromise = this.activeRunner.query<{ count: string }>(sql, params)
+        const countPromise = this.readRunner.query<{ count: string }>(sql, params)
             .then(rows => parseInt(rows[0].count, 10))
             .catch(error => { throw new QueryError(sql, error, params); });
         return Promise.all([this.find(options), countPromise]);
@@ -280,7 +287,7 @@ export class Repository<T> {
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildCount(where);
         try {
-            const rows = await this.activeRunner.query<{ count: string }>(sql, params);
+            const rows = await this.readRunner.query<{ count: string }>(sql, params);
             return parseInt(rows[0].count, 10);
         } catch (error) {
             throw new QueryError(sql, error, params);

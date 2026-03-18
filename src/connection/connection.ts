@@ -1,7 +1,8 @@
-import { PgAdapter } from '../adapters/pg/pg-adapter';
+import { MysqlAdapter } from '../adapters/mysql/mysql-adapter';
+import { PostgresAdapter } from '../adapters/pg/pg-adapter';
 import { SqliteAdapter } from '../adapters/sqlite/sqlite-adapter';
 import { transactionStore } from '../context/transaction-store';
-import { PostgresDialect, SQLiteDialect } from '../dialects';
+import { MySQLDialect, PostgresDialect, SQLiteDialect } from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
@@ -29,11 +30,15 @@ export class Connection {
     }
 
     public static async postgres(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new PgAdapter(), dialect: new PostgresDialect() });
+        return Connection.create({ ...config, adapter: new PostgresAdapter(), dialect: new PostgresDialect() });
     }
 
     public static async sqlite(config: IConnectionConfig): Promise<Connection> {
         return Connection.create({ ...config, adapter: new SqliteAdapter(), dialect: new SQLiteDialect() });
+    }
+
+    public static async mysql(config: IConnectionConfig): Promise<Connection> {
+        return Connection.create({ ...config, adapter: new MysqlAdapter(), dialect: new MySQLDialect() });
     }
 
     public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {

@@ -19,7 +19,7 @@ const ARRAY_QUERY_TYPES = {
     },
 };
 
-class PgTransactionRunner implements ITransactionRunner {
+class PostgresTransactionRunner implements ITransactionRunner {
     constructor(private readonly client: PoolClient) {}
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
@@ -52,7 +52,7 @@ class PgTransactionRunner implements ITransactionRunner {
     }
 }
 
-export class PgAdapter implements IDriverAdapter {
+export class PostgresAdapter implements IDriverAdapter {
     private pool: Pool | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
@@ -127,7 +127,7 @@ export class PgAdapter implements IDriverAdapter {
         if (!this.pool) throw new Error('Not connected');
         const client = await this.pool.connect();
         await client.query('BEGIN');
-        return new PgTransactionRunner(client);
+        return new PostgresTransactionRunner(client);
     }
 
     public async disconnect(): Promise<void> {

@@ -22,12 +22,13 @@ export { TransactionContext } from './connection/transaction-context';
 export type { IConnectionOptions, IConnectionConfig, ISslOptions } from './connection/connection-options';
 
 // ─── Adapters ─────────────────────────────────────────────────────────────────
-export { PgAdapter } from './adapters/pg/pg-adapter';
+export { PostgresAdapter } from './adapters/pg/pg-adapter';
 export { SqliteAdapter } from './adapters/sqlite/sqlite-adapter';
+export { MysqlAdapter } from './adapters/mysql/mysql-adapter';
 export type { IDriverAdapter } from './adapters/adapter';
 
 // ─── Dialects ─────────────────────────────────────────────────────────────────
-export { PostgresDialect, SQLiteDialect } from './dialects';
+export { PostgresDialect, SQLiteDialect, MySQLDialect } from './dialects';
 export type { IDialect } from './dialects';
 
 // ─── Repository ───────────────────────────────────────────────────────────────

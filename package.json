@@ -45,6 +45,7 @@
     "dependencies": {
         "@paralleldrive/cuid2": "^3.3.0",
         "better-sqlite3": "^12.8.0",
+        "mysql2": "^3.20.0",
         "pg": "^8.20.0"
     },
     "exports": {

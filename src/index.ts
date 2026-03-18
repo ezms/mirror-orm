@@ -25,10 +25,11 @@ export type { IConnectionOptions, IConnectionConfig, ISslOptions } from './conne
 export { PostgresAdapter } from './adapters/pg/pg-adapter';
 export { SqliteAdapter } from './adapters/sqlite/sqlite-adapter';
 export { MysqlAdapter } from './adapters/mysql/mysql-adapter';
+export { MssqlAdapter } from './adapters/mssql/mssql-adapter';
 export type { IDriverAdapter } from './adapters/adapter';
 
 // ─── Dialects ─────────────────────────────────────────────────────────────────
-export { PostgresDialect, SQLiteDialect, MySQLDialect } from './dialects';
+export { PostgresDialect, SQLiteDialect, MySQLDialect, MssqlDialect } from './dialects';
 export type { IDialect } from './dialects';
 
 // ─── Repository ───────────────────────────────────────────────────────────────

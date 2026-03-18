@@ -80,6 +80,10 @@ export class RepositoryState<T> {
         return this.dialect.lastInsertIdQuery;
     }
 
+    public get supportsOutputInserted(): boolean {
+        return this.dialect.supportsOutputInserted ?? false;
+    }
+
     public buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string {
         return this.dialect.buildArrayInClause(quotedColumn, ids, params);
     }

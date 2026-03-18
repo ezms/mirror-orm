@@ -131,7 +131,9 @@ export class SqlAssembler<T> {
         const params = columns.map(c => record[c.propertyKey]);
         const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
         return {
-            sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')})${this.state.supportsReturning ? ' RETURNING *' : ''}`,
+            sql: this.state.supportsOutputInserted
+                ? `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) OUTPUT INSERTED.* VALUES (${placeholders.join(', ')})`
+                : `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')})${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }
@@ -158,7 +160,9 @@ export class SqlAssembler<T> {
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(i + 1)}`);
         const params = [...columns.map(c => record[c.propertyKey]), pkValue];
         return {
-            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
+            sql: this.state.supportsOutputInserted
+                ? `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} OUTPUT INSERTED.* WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}`
+                : `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }

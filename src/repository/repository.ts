@@ -576,7 +576,7 @@ export class Repository<T> {
         }
         const { sql, params } = this.assembler.buildInsert(record, isIdentity);
         try {
-            if (this.state.supportsReturning) {
+            if (this.state.supportsReturning || this.state.supportsOutputInserted) {
                 const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
                 return this.captureSnapshot(this.state.hydrator(rows[0]));
             }
@@ -597,7 +597,7 @@ export class Repository<T> {
     private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): Promise<T> {
         const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns);
         try {
-            if (this.state.supportsReturning) {
+            if (this.state.supportsReturning || this.state.supportsOutputInserted) {
                 const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
                 return this.captureSnapshot(this.state.hydrator(rows[0]));
             }

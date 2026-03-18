@@ -1,8 +1,9 @@
 import { MysqlAdapter } from '../adapters/mysql/mysql-adapter';
+import { MssqlAdapter } from '../adapters/mssql/mssql-adapter';
 import { PostgresAdapter } from '../adapters/pg/pg-adapter';
 import { SqliteAdapter } from '../adapters/sqlite/sqlite-adapter';
 import { transactionStore } from '../context/transaction-store';
-import { MySQLDialect, PostgresDialect, SQLiteDialect } from '../dialects';
+import { MySQLDialect, MssqlDialect, PostgresDialect, SQLiteDialect } from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
@@ -39,6 +40,10 @@ export class Connection {
 
     public static async mysql(config: IConnectionConfig): Promise<Connection> {
         return Connection.create({ ...config, adapter: new MysqlAdapter(), dialect: new MySQLDialect() });
+    }
+
+    public static async sqlServer(config: IConnectionConfig): Promise<Connection> {
+        return Connection.create({ ...config, adapter: new MssqlAdapter(), dialect: new MssqlDialect() });
     }
 
     public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {

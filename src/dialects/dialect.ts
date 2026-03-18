@@ -27,6 +27,13 @@ export interface IDialect {
     readonly supportsReturning: boolean;
 
     /**
+     * Whether this database supports OUTPUT INSERTED.* inline in INSERT/UPDATE.
+     * SQL Server: true. PostgreSQL uses RETURNING instead. MySQL/SQLite: false.
+     * When true, the OUTPUT clause is injected before VALUES (INSERT) or before WHERE (UPDATE).
+     */
+    readonly supportsOutputInserted?: boolean;
+
+    /**
      * SQL to retrieve the last auto-generated row ID after an INSERT.
      * Only required when supportsReturning is false and identity strategy is used.
      *

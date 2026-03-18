@@ -68,6 +68,14 @@ export class RepositoryState<T> {
         return this.dialect.quoteIdentifier(identifier);
     }
 
+    public placeholder(index: number): string {
+        return this.dialect.placeholder(index);
+    }
+
+    public get supportsReturning(): boolean {
+        return this.dialect.supportsReturning;
+    }
+
     private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
         return new Map(
             this.metadata.columns.map(c => [

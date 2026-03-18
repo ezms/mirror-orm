@@ -17,6 +17,9 @@ export class Connection {
         if (options.adapter.queryArray) {
             this.queryArray = (input, params) => options.adapter.queryArray!(input, params);
         }
+        if (options.adapter.queryStream) {
+            this.queryStream = (sql, params) => options.adapter.queryStream!(sql, params);
+        }
     }
 
     public static async create(options: IConnectionOptions): Promise<Connection> {
@@ -37,6 +40,7 @@ export class Connection {
     }
 
     public queryArray?: IQueryRunner['queryArray'];
+    public queryStream?: IQueryRunner['queryStream'];
 
     public getRepository<T>(target: new () => T): Repository<T> {
         return new Repository(this.getOrCompile(target), this.withLogger(this));

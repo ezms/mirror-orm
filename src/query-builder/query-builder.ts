@@ -169,7 +169,7 @@ export class QueryBuilder<T> {
 
         for (const raw of this._rawWheres) {
             const offset = params.length;
-            const remapped = raw.sql.replace(/\$(\d+)/g, (_, n) => `$${parseInt(n, 10) + offset}`);
+            const remapped = raw.sql.replace(/\$(\d+)/g, (_, n) => this.state.placeholder(parseInt(n, 10) + offset));
             params.push(...raw.params);
             parts.push(remapped);
         }
@@ -190,12 +190,12 @@ export class QueryBuilder<T> {
                 quotedCol = col.quotedDatabaseName;
             }
             if (isOperator(value)) {
-                const { sql, params: opParams } = value.buildClause(quotedCol, params.length + 1);
+                const { sql, params: opParams } = value.buildClause(quotedCol, params.length + 1, this.state.placeholder.bind(this.state));
                 clauses.push(sql);
                 params.push(...opParams);
             } else {
                 params.push(value);
-                clauses.push(`${quotedCol} = $${params.length}`);
+                clauses.push(`${quotedCol} = ${this.state.placeholder(params.length)}`);
             }
         }
         return clauses;

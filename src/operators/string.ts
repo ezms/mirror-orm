@@ -1,9 +1,9 @@
-import { IQueryOperator } from './query-operator';
+import { IQueryOperator, pgPlaceholder } from './query-operator';
 
 export const Like = (value: string): IQueryOperator => ({
-    buildClause: (col, i) => ({ sql: `${col} LIKE $${i}`, params: [value] }),
+    buildClause: (col, i, p = pgPlaceholder) => ({ sql: `${col} LIKE ${(p ?? pgPlaceholder)(i)}`, params: [value] }),
 });
 
 export const ILike = (value: string): IQueryOperator => ({
-    buildClause: (col, i) => ({ sql: `${col} ILIKE $${i}`, params: [value] }),
+    buildClause: (col, i, p = pgPlaceholder) => ({ sql: `${col} ILIKE ${(p ?? pgPlaceholder)(i)}`, params: [value] }),
 });

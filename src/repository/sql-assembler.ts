@@ -129,7 +129,7 @@ export class SqlAssembler<T> {
         const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const params = columns.map(c => record[c.propertyKey]);
-        const placeholders = params.map((_, i) => `$${i + 1}`);
+        const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
         return {
             sql: `INSERT INTO ${this.state.quotedTableName} (${names.join(', ')}) VALUES (${placeholders.join(', ')}) RETURNING *`,
             params,
@@ -143,7 +143,7 @@ export class SqlAssembler<T> {
         const rowPlaceholders = records.map(record => {
             const placeholders = columns.map(c => {
                 allParams.push(record[c.propertyKey]);
-                return `$${allParams.length}`;
+                return this.state.placeholder(allParams.length);
             });
             return `(${placeholders.join(', ')})`;
         });
@@ -155,10 +155,10 @@ export class SqlAssembler<T> {
 
     public buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): { sql: string; params: Array<unknown> } {
         const columns = dirtyColumns ?? this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
-        const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${i + 1}`);
+        const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(i + 1)}`);
         const params = [...columns.map(c => record[c.propertyKey]), pkValue];
         return {
-            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = $${columns.length + 1} RETURNING *`,
+            sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)} RETURNING *`,
             params,
         };
     }
@@ -170,7 +170,7 @@ export class SqlAssembler<T> {
         if (columns.length === 0) throw new QueryError('UPDATE', new Error('No updatable columns provided'));
         const setClauses = columns.map(c => {
             params.push(record[c.propertyKey]);
-            return `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = $${params.length}`;
+            return `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(params.length)}`;
         });
         const whereSql = this.buildWhere(where, params);
         return {
@@ -197,7 +197,7 @@ export class SqlAssembler<T> {
         const insertCols = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
         const names = insertCols.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const params = insertCols.map(c => record[c.propertyKey]);
-        const placeholders = params.map((_, i) => `$${i + 1}`);
+        const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
 
         const conflictCols = conflictPropertyKeys
             .map(k => this.state.columnMap.get(k)?.quotedDatabaseName)
@@ -222,11 +222,11 @@ export class SqlAssembler<T> {
     }
 
     public buildRemove(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
-        return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = $1`;
+        return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(1)}`;
     }
 
     public buildRemoveMany(pk: IColumnMetadata & { quotedDatabaseName: string }): string {
-        return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY($1)`;
+        return `DELETE FROM ${this.state.quotedTableName} WHERE ${pk.quotedDatabaseName} = ANY(${this.state.placeholder(1)})`;
     }
 
     private buildMtoInfo(relation: IRelationMetadata, relatedState: RepositoryState<unknown>): ManyToOneInfo {
@@ -256,12 +256,12 @@ export class SqlAssembler<T> {
             const column = this.state.columnMap.get(key);
             if (!column) continue;
             if (isOperator(value)) {
-                const { sql, params: opParams } = value.buildClause(column.quotedDatabaseName, params.length + 1);
+                const { sql, params: opParams } = value.buildClause(column.quotedDatabaseName, params.length + 1, this.state.placeholder.bind(this.state));
                 clauses.push(sql);
                 params.push(...opParams);
             } else {
                 params.push(value);
-                clauses.push(`${column.quotedDatabaseName} = $${params.length}`);
+                clauses.push(`${column.quotedDatabaseName} = ${this.state.placeholder(params.length)}`);
             }
         }
         return clauses;

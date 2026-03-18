@@ -1,8 +1,8 @@
-import { IQueryOperator } from './query-operator';
+import { IQueryOperator, pgPlaceholder } from './query-operator';
 
 export const In = (values: Array<unknown>): IQueryOperator => ({
-    buildClause: (col, i) => ({
-        sql: `${col} IN (${values.map((_, j) => `$${i + j}`).join(', ')})`,
+    buildClause: (col, i, p = pgPlaceholder) => ({
+        sql: `${col} IN (${values.map((_, j) => (p ?? pgPlaceholder)(i + j)).join(', ')})`,
         params: values,
     }),
 });

@@ -99,6 +99,30 @@ export class PgAdapter implements IDriverAdapter {
         }
     }
 
+    public async *queryStream(sql: string, params?: Array<unknown>, batchSize = 200): AsyncIterable<unknown[]> {
+        if (!this.pool) throw new Error('Not connected');
+        const client = await this.pool.connect();
+        try {
+            await client.query('BEGIN');
+            const declareSql = params && params.length > 0
+                ? await client.query(`DECLARE mirror_cursor CURSOR FOR ${sql}`, params)
+                : await client.query(`DECLARE mirror_cursor CURSOR FOR ${sql}`);
+            void declareSql;
+            while (true) {
+                const result = await client.query({ text: `FETCH ${batchSize} FROM mirror_cursor`, rowMode: 'array', types: ARRAY_QUERY_TYPES });
+                if (result.rows.length === 0) break;
+                yield* result.rows as unknown[][];
+            }
+            await client.query('CLOSE mirror_cursor');
+            await client.query('COMMIT');
+        } catch (error) {
+            await client.query('ROLLBACK').catch(() => {});
+            throw error;
+        } finally {
+            client.release();
+        }
+    }
+
     public async acquireTransactionRunner(): Promise<ITransactionRunner> {
         if (!this.pool) throw new Error('Not connected');
         const client = await this.pool.connect();

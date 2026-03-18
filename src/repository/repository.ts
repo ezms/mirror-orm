@@ -76,6 +76,15 @@ export class Repository<T> {
         return new Repository(this.state, runner, false);
     }
 
+    public async *findStream(options: IFindOptions<T> = {}): AsyncGenerator<T> {
+        const plan = this.assembler.buildFind(options);
+        const runner = this.activeRunner;
+        if (!runner.queryStream) throw new Error('queryStream is not supported by the current adapter');
+        for await (const row of runner.queryStream(plan.sql, plan.params)) {
+            yield this.captureSnapshot(this.state.arrayHydrator(row));
+        }
+    }
+
     public async findAll(): Promise<Array<T>> {
         const stmt = this.state.findAllStatement;
         const runner = this.activeRunner;
@@ -171,7 +180,7 @@ export class Repository<T> {
         mainIds: Array<unknown>,
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
-        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY(${relatedState.placeholder(1)})`;
         const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
@@ -190,7 +199,7 @@ export class Repository<T> {
         mainIds: Array<unknown>,
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
-        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY($1)`;
+        const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE "${relation.foreignKey}" = ANY(${relatedState.placeholder(1)})`;
         const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
         const grouped = new Map<unknown, unknown>();
         for (const relRow of relRows) grouped.set(relRow[relation.foreignKey], relatedState.hydrator(relRow));
@@ -208,7 +217,7 @@ export class Repository<T> {
         const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
         const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
         const ownerAlias = '_mirror_mtm_fk_';
-        const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY($1)`;
+        const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} = ANY(${relatedState.placeholder(1)})`;
         const relRows = await this.activeRunner.query<Record<string, unknown>>(sql, [mainIds]);
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
@@ -451,7 +460,7 @@ export class Repository<T> {
             if (!this.isOtmOrOtoInverse(relation)) continue;
             if (!this.hasCascade(relation, 'remove')) continue;
             const relatedState = this.state.getRelatedState(relation);
-            const deleteSql = `DELETE FROM ${relatedState.quotedTableName} WHERE ${relatedState.quoteIdentifier(relation.foreignKey)} = $1`;
+            const deleteSql = `DELETE FROM ${relatedState.quotedTableName} WHERE ${relatedState.quoteIdentifier(relation.foreignKey)} = ${relatedState.placeholder(1)}`;
             try {
                 await this.activeRunner.query(deleteSql, [pkValue]);
             } catch (error) {

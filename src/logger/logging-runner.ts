@@ -4,6 +4,7 @@ import { ILogger } from './logger.interface';
 
 export class LoggingQueryRunner implements IQueryRunner {
     queryArray?: IQueryRunner['queryArray'];
+    queryStream?: IQueryRunner['queryStream'];
 
     constructor(
         protected readonly runner: IQueryRunner,
@@ -15,6 +16,12 @@ export class LoggingQueryRunner implements IQueryRunner {
                 const values = typeof input === 'string' ? params : input.values;
                 this.logger.query(sql, values);
                 return runner.queryArray!(input, params);
+            };
+        }
+        if (runner.queryStream) {
+            this.queryStream = (sql, params) => {
+                this.logger.query(sql, params);
+                return runner.queryStream!(sql, params);
             };
         }
     }

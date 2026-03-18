@@ -1,5 +1,7 @@
+export const pgPlaceholder = (i: number): string => `$${i}`;
+
 export interface IQueryOperator {
-    buildClause(columnName: string, startIndex: number): { sql: string; params: Array<unknown> };
+    buildClause(columnName: string, startIndex: number, p?: (i: number) => string): { sql: string; params: Array<unknown> };
 }
 
 export const isOperator = (value: unknown): value is IQueryOperator => {

@@ -1,7 +1,8 @@
 import { IColumnMetadata } from '../interfaces/column-metadata';
+import { IEmbedMetadata } from '../interfaces/entity-metadata';
 import { IRelationMetadata } from '../interfaces/relation-metadata';
 import { registry } from '../metadata/registry';
-import { COLUMNS_KEY, HOOKS_KEY, RELATIONS_KEY } from '../metadata/symbols';
+import { COLUMNS_KEY, EMBEDS_KEY, HOOKS_KEY, RELATIONS_KEY } from '../metadata/symbols';
 
 type EntityDecorator = <T extends new (...args: Array<any>) => any>(value: T, context: ClassDecoratorContext) => void;
 
@@ -19,9 +20,24 @@ type EntityFactory = {
 
 const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDecoratorContext): void => {
     const className = String(context.name);
-    const columns = (context.metadata?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [];
+    const columns   = [...((context.metadata?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [])];
     const relations = (context.metadata?.[RELATIONS_KEY] as Array<IRelationMetadata> | undefined) ?? [];
-    const rawHooks = (context.metadata?.[HOOKS_KEY] as Record<string, Array<string>> | undefined) ?? {};
+    const rawHooks  = (context.metadata?.[HOOKS_KEY] as Record<string, Array<string>> | undefined) ?? {};
+    const embeds    = (context.metadata?.[EMBEDS_KEY] as Array<IEmbedMetadata> | undefined) ?? [];
+
+    for (const embed of embeds) {
+        const targetClass = embed.target();
+        const embeddedCols = ((targetClass as any)[(Symbol as any).metadata]?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [];
+        for (const col of embeddedCols) {
+            columns.push({
+                ...col,
+                propertyKey:    `${embed.prefix}${col.propertyKey}`,
+                databaseName:   `${embed.prefix}${col.databaseName}`,
+                embedOwnerKey:  embed.propertyKey,
+                embedSourceKey: col.propertyKey,
+            });
+        }
+    }
 
     const tableName = typeof arg === 'object' ? arg.tableName : arg;
     const filters   = typeof arg === 'object' ? arg.filters   : undefined;
@@ -37,6 +53,7 @@ const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDeco
             afterLoad:    rawHooks.afterLoad    ?? [],
         },
         filters,
+        embeds: embeds.length > 0 ? embeds : undefined,
     });
 };
 

@@ -11,4 +11,6 @@ export interface IColumnMetadata {
     updatedAt?: boolean;
     deletedAt?: boolean;
     version?: boolean;
+    embedOwnerKey?: string;
+    embedSourceKey?: string;
 }

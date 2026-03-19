@@ -13,6 +13,7 @@ export { CreatedAt } from './decorators/created-at';
 export { UpdatedAt } from './decorators/updated-at';
 export { DeletedAt } from './decorators/deleted-at';
 export { VersionColumn } from './decorators/version-column';
+export { Embedded } from './decorators/embedded';
 export { BeforeInsert } from './decorators/before-insert';
 export { BeforeUpdate } from './decorators/before-update';
 export { AfterLoad } from './decorators/after-load';

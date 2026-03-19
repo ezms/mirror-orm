@@ -89,8 +89,16 @@ export class Repository<T> {
     private captureSnapshot(entity: T): T {
         const cols = this.state.metadata.columns;
         const snap = new Array<unknown>(cols.length);
-        const rec = entity as Record<string, unknown>;
-        for (let i = 0; i < cols.length; i++) snap[i] = rec[cols[i].propertyKey];
+        const rec  = entity as Record<string, unknown>;
+        for (let i = 0; i < cols.length; i++) {
+            const col = cols[i];
+            if (col.embedOwnerKey) {
+                const owner = rec[col.embedOwnerKey] as Record<string, unknown> | null | undefined;
+                snap[i] = owner?.[col.embedSourceKey!];
+            } else {
+                snap[i] = rec[col.propertyKey];
+            }
+        }
         entitySnapshots.set(entity as object, snap);
         return entity;
     }
@@ -490,7 +498,7 @@ export class Repository<T> {
         const records: Array<Record<string, unknown>> = [];
         for (const entity of entities) {
             await this.runHooks(entity, this.state.hooks.beforeInsert);
-            const record = { ...(entity as Record<string, unknown>) };
+            const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
             this.applyAutoFkMapping(record);
             if (!isIdentity && pk.generation &&
                 (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null))
@@ -587,7 +595,7 @@ export class Repository<T> {
         if (visited.has(entity as object)) return entity;
         visited.add(entity as object);
 
-        const record = entity as Record<string, unknown>;
+        const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
 
         for (const relation of this.state.metadata.relations) {
             if (!this.isMtoOrOtoOwner(relation)) continue;
@@ -727,7 +735,7 @@ export class Repository<T> {
 
     public async upsert(entity: T, conflictKeys: Array<keyof T & string>, options?: { update?: Array<keyof T & string> }): Promise<T> {
         const pk = this.primaryColumn();
-        const record = { ...(entity as Record<string, unknown>) };
+        const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
 
         if (pk.generation && pk.generation.strategy !== 'identity') {
             if (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null) {

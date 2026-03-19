@@ -176,19 +176,61 @@ export class RepositoryState<T> {
         };
     }
 
+    public flattenEmbeds(record: Record<string, unknown>): Record<string, unknown> {
+        if (!this.metadata.embeds?.length) return record;
+        const flat = { ...record };
+        for (const col of this.metadata.columns) {
+            if (!col.embedOwnerKey) continue;
+            const owner = record[col.embedOwnerKey] as Record<string, unknown> | null | undefined;
+            flat[col.propertyKey] = owner?.[col.embedSourceKey!];
+        }
+        return flat;
+    }
+
+    private collectEmbedGroups(): { groups: Map<string, Array<IColumnMetadata>>; targets: Record<string, new () => unknown> } {
+        const targets: Record<string, new () => unknown> = {};
+        const groups = new Map<string, Array<IColumnMetadata>>();
+        for (const embed of this.metadata.embeds ?? []) targets[embed.propertyKey] = embed.target();
+        for (const c of this.metadata.columns) {
+            if (!c.embedOwnerKey) continue;
+            if (!groups.has(c.embedOwnerKey)) groups.set(c.embedOwnerKey, []);
+            groups.get(c.embedOwnerKey)!.push(c);
+        }
+        return { groups, targets };
+    }
+
+    private buildEmbedHydratorCode(groups: Map<string, Array<IColumnMetadata>>): string {
+        let code = '';
+        for (const [ownerKey, cols] of groups) {
+            const v = `_e_${ownerKey}`;
+            code += `var ${v}=Object.create(E["${ownerKey}"].prototype);`;
+            for (const c of cols) {
+                const rhs = this.buildCastExpression(c.databaseName, c.options.type);
+                code += `if(r["${c.databaseName}"]!==undefined)${v}["${c.embedSourceKey}"]=${rhs};`;
+            }
+            code += `i["${ownerKey}"]=${v};`;
+        }
+        return code;
+    }
+
     private buildArrayHydrator(): (row: unknown[]) => T {
+        const { groups, targets } = this.collectEmbedGroups();
+        const setup    = [...groups.keys()].map(k => `var _e_${k}=Object.create(E["${k}"].prototype);`);
+        const teardown = [...groups.keys()].map(k => `i["${k}"]=_e_${k};`);
+        const assignments: Array<string> = [];
+
         let idx = 0;
-        const assignments = this.metadata.columns
-            .map(c => {
-                if (c.options.select === false) return '';
-                const i = idx++;
-                const prop = c.propertyKey;
-                const rhs = this.buildArrayCastExpression(i, c.options.type);
-                return `if(r[${i}]!==undefined&&r[${i}]!==null)i["${prop}"]=${rhs};`;
-            })
-            .join('');
-        const fn = new Function('C', 'H', `return function hydrateArray(r){var i=Object.create(C.prototype);${assignments}return i;}`);
-        return fn(this.target, HYDRATOR_HELPERS) as (row: unknown[]) => T;
+        for (const c of this.metadata.columns) {
+            if (c.options.select === false) continue;
+            const i = idx++;
+            const rhs    = this.buildArrayCastExpression(i, c.options.type);
+            const target = c.embedOwnerKey ? `_e_${c.embedOwnerKey}["${c.embedSourceKey}"]` : `i["${c.propertyKey}"]`;
+            assignments.push(`if(r[${i}]!==undefined&&r[${i}]!==null)${target}=${rhs};`);
+        }
+
+        const body = [...setup, ...assignments, ...teardown].join('');
+        const fn = new Function('C', 'H', 'E', `return function hydrateArray(r){var i=Object.create(C.prototype);${body}return i;}`);
+        return fn(this.target, HYDRATOR_HELPERS, targets) as (row: unknown[]) => T;
     }
 
     private buildArrayCastExpression(idx: number, type: import('../interfaces/column-options').ColumnType | undefined): string {
@@ -205,16 +247,17 @@ export class RepositoryState<T> {
     }
 
     private buildHydrator(): (row: Record<string, unknown>) => T {
-        const assignments = this.metadata.columns
+        const { groups, targets } = this.collectEmbedGroups();
+        const regularCode = this.metadata.columns
+            .filter(c => !c.embedOwnerKey)
             .map(c => {
-                const db = c.databaseName;
-                const prop = c.propertyKey;
-                const rhs = this.buildCastExpression(db, c.options.type);
-                return `if(r["${db}"]!==undefined)i["${prop}"]=${rhs};`;
+                const rhs = this.buildCastExpression(c.databaseName, c.options.type);
+                return `if(r["${c.databaseName}"]!==undefined)i["${c.propertyKey}"]=${rhs};`;
             })
             .join('');
-        const fn = new Function('C', 'H', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
-        return fn(this.target, HYDRATOR_HELPERS) as (row: Record<string, unknown>) => T;
+        const embedCode = this.buildEmbedHydratorCode(groups);
+        const fn = new Function('C', 'H', 'E', `return function hydrate(r){var i=Object.create(C.prototype);${regularCode}${embedCode}return i;}`);
+        return fn(this.target, HYDRATOR_HELPERS, targets) as (row: Record<string, unknown>) => T;
     }
 
     private buildCastExpression(db: string, type: import('../interfaces/column-options').ColumnType | undefined): string {

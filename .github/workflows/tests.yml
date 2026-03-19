@@ -1,0 +1,152 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── Lint & Build ────────────────────────────────────────────────────────────
+
+  lint-build:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build
+
+  # ─── Tests & Coverage ────────────────────────────────────────────────────────
+
+  test:
+    name: Tests & Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mirror
+          POSTGRES_PASSWORD: mirror
+          POSTGRES_DB: mirror_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: mirror
+          MYSQL_DATABASE: mirror_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Mirror@12345
+        ports: ['1433:1433']
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -No"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
+
+    env:
+      MIRROR_TEST_PG_URL: postgres://mirror:mirror@localhost:5432/mirror_test
+      MIRROR_TEST_MYSQL_URL: mysql://root:mirror@localhost:3306/mirror_test
+      MIRROR_TEST_MSSQL_SERVER: localhost
+      MIRROR_TEST_MSSQL_USER: SA
+      MIRROR_TEST_MSSQL_PASSWORD: Mirror@12345
+      MIRROR_TEST_MSSQL: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # DB drivers are peerDependencies (optional for users) but required for tests.
+      # Add them back to devDependencies if you want to avoid this step.
+      - name: Install DB drivers for tests
+        run: pnpm add pg better-sqlite3 mysql2 mssql
+
+      - name: Run tests with coverage
+        run: pnpm test:coverage
+
+  # ─── Benchmark (comparative) ─────────────────────────────────────────────────
+  # Runs bench:pure on the PR code and on develop, on the same runner (sequential).
+  # Hardware variability cancels out. Fails if PR is >15% slower than develop.
+
+  bench:
+    name: Benchmark (comparative)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install (PR)
+        run: pnpm install --frozen-lockfile
+
+      - name: Bench PR code
+        run: pnpm benchmark:pure 2>/dev/null | tee /tmp/bench-pr.txt
+
+      # Save the compare script before switching branches
+      # (it may not exist on develop if this is the first PR that adds it)
+      - name: Save compare script
+        run: cp .github/scripts/compare-bench.mjs /tmp/compare-bench.mjs
+
+      - name: Checkout develop
+        run: |
+          git fetch origin develop
+          git checkout origin/develop
+
+      - name: Install (develop)
+        run: pnpm install
+
+      - name: Bench develop code
+        run: pnpm benchmark:pure 2>/dev/null | tee /tmp/bench-develop.txt
+
+      - name: Compare
+        run: node /tmp/compare-bench.mjs /tmp/bench-pr.txt /tmp/bench-develop.txt

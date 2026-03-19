@@ -9,6 +9,8 @@ export default defineConfig({
             provider: 'v8',
             include: ['src/**/*.ts'],
             exclude: ['src/__tests__/**', 'src/index.ts', 'src/polyfills.ts'],
+            reporter: ['text', 'json-summary'],
+            reportsDirectory: './coverage',
         },
     },
 });

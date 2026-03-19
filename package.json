@@ -40,7 +40,7 @@
         "query-builder",
         "multi-dialect"
     ],
-    "author": "",
+    "author": "Emanuel Martins <emanuelm.dev@gmail.com>",
     "license": "Apache-2.0",
     "packageManager": "pnpm@10.31.0",
     "dependencies": {

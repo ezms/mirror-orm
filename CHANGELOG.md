@@ -54,11 +54,7 @@
 
     ### Benchmark pure — pós-Alpha 5 completa
 
-    |               | Mirror ORM    | Drizzle ORM | TypeORM    |
-    | ------------- | ------------- | ----------- | ---------- |
-    | Pure overhead | **~50ns/row** | ~410ns/row  | ~390ns/row |
-
-    Sem regressão no overhead puro do core após todas as adições multi-dialect.
+    Pure overhead: **~50 ns/row** — sem regressão no overhead puro do core após todas as adições multi-dialect.
 
 ## 0.1.0-alpha.4
 
@@ -82,11 +78,9 @@
 
     ### Benchmark (fair interleaved, mesmo processo — 17/03/2026)
 
-    |                   | Mirror ORM    | Drizzle ORM | raw pg |
-    | ----------------- | ------------- | ----------- | ------ |
-    | Query 1k rows     | **0.87ms**    | 1.19ms      | 1.72ms |
-    | Relations 1k rows | **1.52ms**    | 4.27ms      | —      |
-    | Pure overhead     | **73 ns/row** | 397 ns/row  | —      |
+    - Query 1k rows: **0.87ms**
+    - Relations 1k rows: **1.52ms**
+    - Pure overhead: **73 ns/row**
 
 ## 0.1.0-alpha.3
 
@@ -133,7 +127,7 @@
     ***
 
     ### Performance
-    - **JIT-compiled hydrator** — `buildHydrator()` uses `new Function()` to generate a monomorphic function per entity at startup. V8 applies Inline Caches to every field access, yielding **37 ns/row** pure ORM overhead (~10× faster than Drizzle/TypeORM in the same benchmark).
+    - **JIT-compiled hydrator** — `buildHydrator()` uses `new Function()` to generate a monomorphic function per entity at startup. V8 applies Inline Caches to every field access, yielding **37 ns/row** pure ORM overhead.
     - **Explicit SELECT clause** — queries now emit `SELECT "col1", "col2"` instead of `SELECT *`, allowing PostgreSQL to skip unrequested columns and enabling the JIT hydrator to guarantee column presence without runtime checks.
     - **Named prepared statements** — `findAll` and `findById` use `INamedQuery` objects with stable names (`mirror_<table>_fa`, `mirror_<table>_fbi`), letting the `pg` driver skip parse/plan on repeated calls.
     - **`RepositoryState` pre-computation** — column map, select clause, qualified select clause, primary column reference, hydrator, and cached SQL statements are all built once at `Connection.getRepository()` time, never on the hot path.

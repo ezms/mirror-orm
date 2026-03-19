@@ -24,6 +24,7 @@ export class RepositoryState<T> {
     public readonly cachedCreatedAtColumn: IColumnMetadata | null;
     public readonly cachedUpdatedAtColumn: IColumnMetadata | null;
     public readonly cachedDeletedAtColumn: IColumnMetadata | null;
+    public readonly cachedVersionColumn: IColumnMetadata | null;
     public readonly quotedTableName: string;
     public readonly selectClause: string;
     public readonly qualifiedSelectClause: string;
@@ -53,6 +54,7 @@ export class RepositoryState<T> {
         this.cachedCreatedAtColumn = this.metadata.columns.find(c => c.createdAt) ?? null;
         this.cachedUpdatedAtColumn = this.metadata.columns.find(c => c.updatedAt) ?? null;
         this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
+        this.cachedVersionColumn   = this.metadata.columns.find(c => c.version)   ?? null;
         this.hooks = metadata.hooks ?? { beforeInsert: [], beforeUpdate: [], afterLoad: [] };
         this.hydrator = this.buildHydrator();
         this.arrayHydrator = this.buildArrayHydrator();

@@ -20,3 +20,12 @@ export class EntityNotFoundError extends MirrorError {
         super(`Entity "${className}" not found.`, 'ENTITY_NOT_FOUND');
     }
 }
+
+export class OptimisticLockError extends MirrorError {
+    constructor(className: string) {
+        super(
+            `Optimistic lock failed on "${className}": the row was updated or deleted by another transaction.`,
+            'OPTIMISTIC_LOCK',
+        );
+    }
+}

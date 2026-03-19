@@ -1,4 +1,4 @@
-import { EntityNotFoundError, GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
+import { EntityNotFoundError, GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, OptimisticLockError, QueryError } from '../errors';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
@@ -424,19 +424,28 @@ export class Repository<T> {
         const pkValue = record[pk.propertyKey];
         const createdAtCol = this.state.cachedCreatedAtColumn;
         const updatedAtCol = this.state.cachedUpdatedAtColumn;
+        const versionCol = this.state.cachedVersionColumn;
         let saved: T;
 
         if (typeof pkValue !== 'undefined' && pkValue !== null) {
             await this.runHooks(entity, this.state.hooks.beforeUpdate);
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
+
+            let versionInfo: { column: IColumnMetadata & { quotedDatabaseName: string }; currentVersion: number } | undefined;
+            if (versionCol) {
+                const currentVersion = record[versionCol.propertyKey];
+                if (typeof currentVersion !== 'number') throw new OptimisticLockError(this.state.metadata.className);
+                versionInfo = { column: this.state.columnMap.get(versionCol.propertyKey)!, currentVersion };
+            }
+
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
                 const dirtyColumns = this.state.metadata.columns.filter(
-                    (c, i) => !c.primary && record[c.propertyKey] !== snapshot[i],
+                    (c, i) => !c.primary && !c.version && record[c.propertyKey] !== snapshot[i],
                 );
-                saved = dirtyColumns.length === 0 ? entity : await this.updateById(record, pk, pkValue, dirtyColumns);
+                saved = (dirtyColumns.length === 0 && !versionInfo) ? entity : await this.updateById(record, pk, pkValue, dirtyColumns, versionInfo);
             } else {
-                saved = await this.updateById(record, pk, pkValue);
+                saved = await this.updateById(record, pk, pkValue, undefined, versionInfo);
             }
         } else {
             await this.runHooks(entity, this.state.hooks.beforeInsert);
@@ -601,17 +610,28 @@ export class Repository<T> {
         }
     }
 
-    private async updateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): Promise<T> {
-        const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns);
+    private async updateById(
+        record: Record<string, unknown>,
+        pk: IColumnMetadata & { quotedDatabaseName: string },
+        pkValue: unknown,
+        dirtyColumns?: Array<IColumnMetadata>,
+        versionInfo?: { column: IColumnMetadata & { quotedDatabaseName: string }; currentVersion: number },
+    ): Promise<T> {
+        const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns, versionInfo);
         try {
             if (this.state.supportsReturning || this.state.supportsOutputInserted) {
                 const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+                if (versionInfo && rows.length === 0) throw new OptimisticLockError(this.state.metadata.className);
                 return this.captureSnapshot(this.state.hydrator(rows[0]));
             }
             await this.activeRunner.query(sql, params);
             const entity = await this.findById(pkValue as string | number);
+            if (versionInfo && (entity === null || (entity as Record<string, unknown>)[versionInfo.column.propertyKey] !== versionInfo.currentVersion + 1)) {
+                throw new OptimisticLockError(this.state.metadata.className);
+            }
             return entity!;
         } catch (error) {
+            if (error instanceof OptimisticLockError) throw error;
             throw new QueryError(sql, error, params);
         }
     }

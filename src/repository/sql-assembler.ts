@@ -171,14 +171,34 @@ export class SqlAssembler<T> {
         };
     }
 
-    public buildUpdateById(record: Record<string, unknown>, pk: IColumnMetadata & { quotedDatabaseName: string }, pkValue: unknown, dirtyColumns?: Array<IColumnMetadata>): { sql: string; params: Array<unknown> } {
-        const columns = dirtyColumns ?? this.state.metadata.columns.filter(c => !c.primary && record[c.propertyKey] !== undefined);
+    public buildUpdateById(
+        record: Record<string, unknown>,
+        pk: IColumnMetadata & { quotedDatabaseName: string },
+        pkValue: unknown,
+        dirtyColumns?: Array<IColumnMetadata>,
+        versionInfo?: { column: IColumnMetadata & { quotedDatabaseName: string }; currentVersion: number },
+    ): { sql: string; params: Array<unknown> } {
+        const columns = dirtyColumns ?? this.state.metadata.columns.filter(c => !c.primary && !c.version && record[c.propertyKey] !== undefined);
         const setClauses = columns.map((c, i) => `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(i + 1)}`);
-        const params = [...columns.map(c => record[c.propertyKey]), pkValue];
+        const params: Array<unknown> = [...columns.map(c => record[c.propertyKey])];
+
+        if (versionInfo) {
+            setClauses.push(`${versionInfo.column.quotedDatabaseName} = ${this.state.placeholder(params.length + 1)}`);
+            params.push(versionInfo.currentVersion + 1);
+        }
+
+        params.push(pkValue);
+        let whereSql = `${pk.quotedDatabaseName} = ${this.state.placeholder(params.length)}`;
+
+        if (versionInfo) {
+            params.push(versionInfo.currentVersion);
+            whereSql += ` AND ${versionInfo.column.quotedDatabaseName} = ${this.state.placeholder(params.length)}`;
+        }
+
         return {
             sql: this.state.supportsOutputInserted
-                ? `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} OUTPUT INSERTED.* WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}`
-                : `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${pk.quotedDatabaseName} = ${this.state.placeholder(columns.length + 1)}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
+                ? `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} OUTPUT INSERTED.* WHERE ${whereSql}`
+                : `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')} WHERE ${whereSql}${this.state.supportsReturning ? ' RETURNING *' : ''}`,
             params,
         };
     }

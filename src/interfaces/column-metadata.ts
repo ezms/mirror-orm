@@ -10,4 +10,5 @@ export interface IColumnMetadata {
     createdAt?: boolean;
     updatedAt?: boolean;
     deletedAt?: boolean;
+    version?: boolean;
 }

@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm install --frozen-lockfile
+
+      # ─── Lint & Build ─────────────────────────────────────────────────────────
+
+      - run: pnpm lint
+      - run: pnpm build
+
+      # ─── Bump version + generate CHANGELOG ────────────────────────────────────
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version
+        run: pnpm changeset version
+
+      - name: Commit version bump
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git add .
+          git commit -m "chore: release v${VERSION} :bookmark:"
+          git push
+
+      # ─── Publish ──────────────────────────────────────────────────────────────
+
+      - name: Publish to npm
+        run: pnpm changeset publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Push tags
+        run: git push --follow-tags

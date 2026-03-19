@@ -86,6 +86,19 @@ export class SqlAssembler<T> {
         }
 
         let whereSql = this.buildWhere(options.where, params);
+
+        if (options.filters?.length && this.state.metadata.filters) {
+            for (const name of options.filters) {
+                const condition = this.state.metadata.filters[name];
+                if (!condition) continue;
+                const clauses = this.buildWhereGroup(condition, params);
+                if (clauses.length > 0) {
+                    const clause = clauses.length > 1 ? `(${clauses.join(' AND ')})` : clauses[0];
+                    whereSql += whereSql ? ` AND ${clause}` : ` WHERE ${clause}`;
+                }
+            }
+        }
+
         const sdCol = this.state.cachedDeletedAtColumn;
         if (sdCol && !options.withDeleted) {
             const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;

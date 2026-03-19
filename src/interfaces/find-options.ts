@@ -9,4 +9,5 @@ export interface IFindOptions<T> {
     withDeleted?: boolean;
     select?: Array<keyof T & string>;
     lock?: 'pessimistic_write' | 'pessimistic_read';
+    filters?: Array<string>;
 }

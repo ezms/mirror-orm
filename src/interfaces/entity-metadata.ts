@@ -8,4 +8,5 @@ export interface IEntityMetadata {
     columns: Array<IColumnMetadata>;
     relations: Array<IRelationMetadata>;
     hooks?: IEntityHooks;
+    filters?: Record<string, Record<string, unknown>>;
 }

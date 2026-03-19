@@ -34,7 +34,7 @@ const DB_CONFIG = {
     port: 1433,
     database: 'mirror_test',
     user: 'sa',
-    password: 'Mirror@Test1',
+    password: 'Mirror_Test_2026!',
 };
 
 describe('SQL Server adapter', () => {

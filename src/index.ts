@@ -2,7 +2,7 @@
 import './polyfills';
 
 // ─── Decorators ──────────────────────────────────────────────────────────────
-export { Entity } from './decorators/entity';
+export { Entity, type EntityOptions } from './decorators/entity';
 export { Column } from './decorators/column';
 export { PrimaryColumn } from './decorators/primary-column';
 export { ManyToOne } from './decorators/many-to-one';

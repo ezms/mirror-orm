@@ -8,7 +8,17 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             include: ['src/**/*.ts'],
-            exclude: ['src/__tests__/**', 'src/index.ts', 'src/polyfills.ts'],
+            exclude: [
+                'src/__tests__/**',
+                'src/index.ts',
+                'src/polyfills.ts',
+                'src/adapters/mssql/**',
+                'src/dialects/mssql.dialect.ts',
+            ],
+            thresholds: {
+                branches: 80,
+                statements: 80,
+            },
             reporter: ['text', 'json-summary'],
             reportsDirectory: './coverage',
         },

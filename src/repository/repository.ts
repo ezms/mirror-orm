@@ -15,6 +15,22 @@ import { SqlAssembler, FindPlan, OtmInfo, MtmInfo } from './sql-assembler';
 
 export { RepositoryState } from './repository-state';
 
+function buildRelationTree(relations: Array<string>): Map<string, Array<string>> {
+    const tree = new Map<string, Array<string>>();
+    for (const rel of relations) {
+        const dot = rel.indexOf('.');
+        if (dot === -1) {
+            if (!tree.has(rel)) tree.set(rel, []);
+        } else {
+            const parent = rel.slice(0, dot);
+            const child = rel.slice(dot + 1);
+            if (!tree.has(parent)) tree.set(parent, []);
+            tree.get(parent)!.push(child);
+        }
+    }
+    return tree;
+}
+
 export class Repository<T> {
     private readonly state: RepositoryState<T>;
     private readonly runner: IQueryRunner;
@@ -126,7 +142,9 @@ export class Repository<T> {
     }
 
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
-        const plan = this.assembler.buildFind(options);
+        const relationTree = buildRelationTree(options.relations ?? []);
+        const topRelations = [...relationTree.keys()];
+        const plan = this.assembler.buildFind({ ...options, relations: topRelations });
         const runner = this.readRunner;
         const noRelations =
             plan.mtoRelations.length === 0 &&
@@ -156,6 +174,24 @@ export class Repository<T> {
                         ...plan.mtmRelations.map(r => this.loadMtmRelation(entities, rows, mainPkDbName, mainIds, r)),
                     ]);
                 }
+
+                // Nested (dot-notation) sub-relations
+                const nestedWork: Array<Promise<void>> = [];
+                for (const [relName, subRelations] of relationTree) {
+                    if (subRelations.length === 0) continue;
+                    const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
+                    if (!relation) continue;
+                    const relatedState = this.state.getRelatedState(relation);
+                    const relatedEntities: Array<unknown> = [];
+                    for (const entity of entities) {
+                        const val = (entity as Record<string, unknown>)[relName];
+                        if (Array.isArray(val)) relatedEntities.push(...val);
+                        else if (val != null) relatedEntities.push(val);
+                    }
+                    if (relatedEntities.length > 0)
+                        nestedWork.push(this.loadRelationsForEntities(relatedEntities, relatedState, subRelations));
+                }
+                await Promise.all(nestedWork);
             }
 
             if (this.state.hooks.afterLoad.length > 0)
@@ -240,6 +276,156 @@ export class Repository<T> {
         }
         for (let i = 0; i < entities.length; i++)
             (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? [];
+    }
+
+    private async loadRelationsForEntities(
+        entities: Array<unknown>,
+        state: RepositoryState<unknown>,
+        relations: Array<string>,
+    ): Promise<void> {
+        for (const [propertyKey, childRelations] of buildRelationTree(relations)) {
+            const relation = state.metadata.relations.find(r => r.propertyKey === propertyKey);
+            if (!relation) continue;
+            const childState = state.getRelatedState(relation);
+            const isOwnerSide = relation.type === 'many-to-one' ||
+                (relation.type === 'one-to-one' && state.metadata.columns.some(c => c.databaseName === relation.foreignKey));
+
+            let loaded: Array<unknown>;
+            if (isOwnerSide)                         loaded = await this.loadNestedOwnerSide(entities, state, childState, relation, propertyKey);
+            else if (relation.type === 'many-to-many') loaded = await this.loadNestedMtm(entities, state, childState, relation, propertyKey);
+            else                                       loaded = await this.loadNestedInverse(entities, state, childState, relation, propertyKey);
+
+            if (childRelations.length > 0 && loaded.length > 0)
+                await this.loadRelationsForEntities(loaded, childState, childRelations);
+        }
+    }
+
+    private async loadNestedOwnerSide(
+        parents: Array<unknown>,
+        parentState: RepositoryState<unknown>,
+        childState: RepositoryState<unknown>,
+        relation: IRelationMetadata,
+        propertyKey: string,
+    ): Promise<Array<unknown>> {
+        const fkColumn = parentState.metadata.columns.find(c => c.databaseName === relation.foreignKey);
+        const childPk   = childState.cachedPrimaryColumn;
+        if (!fkColumn || !childPk) return [];
+        const childPkCol = childState.columnMap.get(childPk.propertyKey)!;
+
+        const fkValues = [...new Set(
+            parents.map(p => (p as Record<string, unknown>)[fkColumn.propertyKey]).filter(v => v != null),
+        )];
+        if (fkValues.length === 0) {
+            for (const parent of parents) (parent as Record<string, unknown>)[propertyKey] = null;
+            return [];
+        }
+
+        const params: Array<unknown> = [];
+        const inClause = childState.buildArrayInClause(childPkCol.quotedDatabaseName, fkValues, params);
+        const rows = await this.readRunner.query<Record<string, unknown>>(
+            `SELECT ${childState.selectClause} FROM ${childState.quotedTableName} WHERE ${inClause}`, params,
+        );
+        const childMap = new Map(rows.map(row => [row[childPk.databaseName], childState.hydrator(row)]));
+        for (const parent of parents) {
+            const fkVal = (parent as Record<string, unknown>)[fkColumn.propertyKey];
+            (parent as Record<string, unknown>)[propertyKey] = fkVal != null ? (childMap.get(fkVal) ?? null) : null;
+        }
+        return [...childMap.values()];
+    }
+
+    private async loadNestedInverse(
+        parents: Array<unknown>,
+        parentState: RepositoryState<unknown>,
+        childState: RepositoryState<unknown>,
+        relation: IRelationMetadata,
+        propertyKey: string,
+    ): Promise<Array<unknown>> {
+        const parentPk = parentState.cachedPrimaryColumn;
+        if (!parentPk) return [];
+        const parentIds = [...new Set(
+            parents.map(p => (p as Record<string, unknown>)[parentPk.propertyKey]).filter(v => v != null),
+        )];
+        if (parentIds.length === 0) return [];
+
+        const params: Array<unknown> = [];
+        const inClause = childState.buildArrayInClause(childState.quoteIdentifier(relation.foreignKey), parentIds, params);
+        const rows = await this.readRunner.query<Record<string, unknown>>(
+            `SELECT ${childState.selectClause} FROM ${childState.quotedTableName} WHERE ${inClause}`, params,
+        );
+        const loaded: Array<unknown> = [];
+        if (relation.type === 'one-to-many') {
+            const grouped = new Map<unknown, Array<unknown>>();
+            for (const row of rows) {
+                const fkVal = row[relation.foreignKey];
+                if (!grouped.has(fkVal)) grouped.set(fkVal, []);
+                const child = childState.hydrator(row);
+                grouped.get(fkVal)!.push(child);
+                loaded.push(child);
+            }
+            for (const parent of parents) {
+                const pkVal = (parent as Record<string, unknown>)[parentPk.propertyKey];
+                (parent as Record<string, unknown>)[propertyKey] = grouped.get(pkVal) ?? [];
+            }
+        } else {
+            const grouped = new Map<unknown, unknown>();
+            for (const row of rows) {
+                const child = childState.hydrator(row);
+                grouped.set(row[relation.foreignKey], child);
+                loaded.push(child);
+            }
+            for (const parent of parents) {
+                const pkVal = (parent as Record<string, unknown>)[parentPk.propertyKey];
+                (parent as Record<string, unknown>)[propertyKey] = grouped.get(pkVal) ?? null;
+            }
+        }
+        return loaded;
+    }
+
+    private async loadNestedMtm(
+        parents: Array<unknown>,
+        parentState: RepositoryState<unknown>,
+        childState: RepositoryState<unknown>,
+        relation: IRelationMetadata,
+        propertyKey: string,
+    ): Promise<Array<unknown>> {
+        const parentPk = parentState.cachedPrimaryColumn;
+        if (!parentPk) return [];
+        const parentIds = [...new Set(
+            parents.map(p => (p as Record<string, unknown>)[parentPk.propertyKey]).filter(v => v != null),
+        )];
+        if (parentIds.length === 0) return [];
+
+        const childPkCol = childState.columnMap.get(childState.cachedPrimaryColumn!.propertyKey)!;
+        const qtJoin = parentState.quoteIdentifier(relation.joinTable!);
+        const ownerFkAlias = '_mirror_mtm_fk_';
+        const params: Array<unknown> = [];
+        const inClause = childState.buildArrayInClause(
+            `${qtJoin}.${parentState.quoteIdentifier(relation.foreignKey)}`, parentIds, params,
+        );
+        const sql = [
+            `SELECT ${childState.selectClause},`,
+            `${qtJoin}.${parentState.quoteIdentifier(relation.foreignKey)} AS "${ownerFkAlias}"`,
+            `FROM ${childState.quotedTableName}`,
+            `INNER JOIN ${qtJoin} ON ${qtJoin}.${parentState.quoteIdentifier(relation.inverseFk!)}`,
+            `= ${childState.quotedTableName}.${childPkCol.quotedDatabaseName}`,
+            `WHERE ${inClause}`,
+        ].join(' ');
+        const rows = await this.readRunner.query<Record<string, unknown>>(sql, params);
+
+        const grouped = new Map<unknown, Array<unknown>>();
+        const loaded: Array<unknown> = [];
+        for (const row of rows) {
+            const ownerFk = row[ownerFkAlias];
+            if (!grouped.has(ownerFk)) grouped.set(ownerFk, []);
+            const child = childState.hydrator(row);
+            grouped.get(ownerFk)!.push(child);
+            loaded.push(child);
+        }
+        for (const parent of parents) {
+            const pkVal = (parent as Record<string, unknown>)[parentPk.propertyKey];
+            (parent as Record<string, unknown>)[propertyKey] = grouped.get(pkVal) ?? [];
+        }
+        return loaded;
     }
 
     public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {

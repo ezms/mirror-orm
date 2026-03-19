@@ -37,7 +37,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.findAll();
 
-            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_users_fa', text: 'SELECT "id", "name", "email" FROM "users"' });
+            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_UserFixture_fa', text: 'SELECT "id", "name", "email" FROM "users"' });
             expect(result).toHaveLength(1);
             expect(result[0]).toBeInstanceOf(UserFixture);
             expect(result[0].id).toBe(1);
@@ -63,7 +63,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.findById(1);
 
-            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_users_fbi', text: 'SELECT "id", "name", "email" FROM "users" WHERE "id" = $1', values: [1] });
+            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_UserFixture_fbi', text: 'SELECT "id", "name", "email" FROM "users" WHERE "id" = $1', values: [1] });
             expect(result).toBeInstanceOf(UserFixture);
             expect(result!.id).toBe(1);
         });

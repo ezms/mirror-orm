@@ -16,4 +16,8 @@ export interface IEntityMetadata {
     hooks?: IEntityHooks;
     filters?: Record<string, Record<string, unknown>>;
     embeds?: Array<IEmbedMetadata>;
+    discriminatorColumn?: string;
+    discriminatorValue?: string;
+    stiParent?: string;
+    stiChildren?: Map<string, new () => unknown>;
 }

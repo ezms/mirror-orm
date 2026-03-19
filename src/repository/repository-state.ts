@@ -59,10 +59,8 @@ export class RepositoryState<T> {
         this.hydrator = this.buildHydrator();
         this.arrayHydrator = this.buildArrayHydrator();
         this.autoFkMap = this.buildAutoFkMap();
-        const sdFilter = this.cachedDeletedAtColumn
-            ? ` WHERE ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
-            : '';
-        this.findAllStatement = { name: `mirror_${metadata.tableName}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${sdFilter}` };
+        const staticFilters = this.buildStaticWhereFilters();
+        this.findAllStatement = { name: `mirror_${metadata.className}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${staticFilters}` };
         this.findByIdStatement = this.buildFindByIdStatement();
     }
 
@@ -164,15 +162,28 @@ export class RepositoryState<T> {
         });
     }
 
+    private buildStaticWhereFilters(): string {
+        const clauses: Array<string> = [];
+        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn) {
+            clauses.push(`${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`);
+        }
+        if (this.cachedDeletedAtColumn) {
+            clauses.push(`${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`);
+        }
+        return clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
+    }
+
     private buildFindByIdStatement(): INamedQuery | null {
         if (!this.cachedPrimaryColumn) return null;
         const pk = this.columnMap.get(this.cachedPrimaryColumn.propertyKey)!;
-        const sdExtra = this.cachedDeletedAtColumn
-            ? ` AND ${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`
-            : '';
+        const staticFilters = this.buildStaticWhereFilters();
+        const pkClause = `${pk.quotedDatabaseName} = ${this.placeholder(1)}`;
+        const whereText = staticFilters
+            ? `${staticFilters} AND ${pkClause}`
+            : ` WHERE ${pkClause}`;
         return {
-            name: `mirror_${this.metadata.tableName}_fbi`,
-            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${pk.quotedDatabaseName} = ${this.placeholder(1)}${sdExtra}`,
+            name: `mirror_${this.metadata.className}_fbi`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${whereText}`,
         };
     }
 
@@ -256,6 +267,14 @@ export class RepositoryState<T> {
             })
             .join('');
         const embedCode = this.buildEmbedHydratorCode(groups);
+
+        if (this.metadata.stiChildren && this.metadata.discriminatorColumn) {
+            const discCol = this.metadata.discriminatorColumn;
+            const fn = new Function('C', 'H', 'E', 'S',
+                `return function hydrate(r){var ctor=S.get(r["${discCol}"])||C;var i=Object.create(ctor.prototype);${regularCode}${embedCode}return i;}`);
+            return fn(this.target, HYDRATOR_HELPERS, targets, this.metadata.stiChildren) as (row: Record<string, unknown>) => T;
+        }
+
         const fn = new Function('C', 'H', 'E', `return function hydrate(r){var i=Object.create(C.prototype);${regularCode}${embedCode}return i;}`);
         return fn(this.target, HYDRATOR_HELPERS, targets) as (row: Record<string, unknown>) => T;
     }

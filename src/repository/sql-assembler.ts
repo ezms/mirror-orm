@@ -99,6 +99,11 @@ export class SqlAssembler<T> {
             }
         }
 
+        if (this.state.metadata.discriminatorValue && this.state.metadata.discriminatorColumn) {
+            const discClause = `${this.state.quoteIdentifier(this.state.metadata.discriminatorColumn)} = '${this.state.metadata.discriminatorValue}'`;
+            whereSql += whereSql ? ` AND ${discClause}` : ` WHERE ${discClause}`;
+        }
+
         const sdCol = this.state.cachedDeletedAtColumn;
         if (sdCol && !options.withDeleted) {
             const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;
@@ -142,9 +147,14 @@ export class SqlAssembler<T> {
     }
 
     public buildInsert(record: Record<string, unknown>, isIdentity: boolean): { sql: string; params: Array<unknown> } {
-        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
+        const effectiveRecord = { ...record };
+        if (this.state.metadata.discriminatorValue && this.state.metadata.discriminatorColumn) {
+            const discCol = this.state.metadata.columns.find(c => c.databaseName === this.state.metadata.discriminatorColumn);
+            if (discCol) effectiveRecord[discCol.propertyKey] = this.state.metadata.discriminatorValue;
+        }
+        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && effectiveRecord[c.propertyKey] !== undefined);
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
-        const params = columns.map(c => record[c.propertyKey]);
+        const params = columns.map(c => effectiveRecord[c.propertyKey]);
         const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
         return {
             sql: this.state.supportsOutputInserted

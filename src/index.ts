@@ -17,6 +17,7 @@ export { Embedded } from './decorators/embedded';
 export { BeforeInsert } from './decorators/before-insert';
 export { BeforeUpdate } from './decorators/before-update';
 export { AfterLoad } from './decorators/after-load';
+export { ChildEntity } from './decorators/child-entity';
 
 // ─── Connection ───────────────────────────────────────────────────────────────
 export { Connection } from './connection/connection';

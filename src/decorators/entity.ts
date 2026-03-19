@@ -9,6 +9,7 @@ type EntityDecorator = <T extends new (...args: Array<any>) => any>(value: T, co
 export type EntityOptions = {
     tableName?: string;
     filters?: Record<string, Record<string, unknown>>;
+    discriminatorColumn?: string;
 };
 
 type EntityFactory = {
@@ -39,8 +40,9 @@ const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDeco
         }
     }
 
-    const tableName = typeof arg === 'object' ? arg.tableName : arg;
-    const filters   = typeof arg === 'object' ? arg.filters   : undefined;
+    const tableName           = typeof arg === 'object' ? arg.tableName            : arg;
+    const filters             = typeof arg === 'object' ? arg.filters              : undefined;
+    const discriminatorColumn = typeof arg === 'object' ? arg.discriminatorColumn  : undefined;
 
     registry.registerEntity(className, {
         tableName: tableName ?? className.toLowerCase(),
@@ -54,6 +56,7 @@ const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDeco
         },
         filters,
         embeds: embeds.length > 0 ? embeds : undefined,
+        discriminatorColumn,
     });
 };
 

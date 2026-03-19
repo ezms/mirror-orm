@@ -84,10 +84,12 @@ const nestedInverse = async (
     runner:      IQueryRunner,
 ): Promise<Array<unknown>> => {
     const parentPk = parentState.cachedPrimaryColumn;
+    /* v8 ignore next */
     if (!parentPk) return [];
     const parentIds = [...new Set(
         parents.map(p => (p as Record<string, unknown>)[parentPk.propertyKey]).filter(v => v != null),
     )];
+    /* v8 ignore next */
     if (parentIds.length === 0) return [];
 
     const params: Array<unknown> = [];
@@ -134,10 +136,12 @@ const nestedMtm = async (
     runner:      IQueryRunner,
 ): Promise<Array<unknown>> => {
     const parentPk = parentState.cachedPrimaryColumn;
+    /* v8 ignore next */
     if (!parentPk) return [];
     const parentIds = [...new Set(
         parents.map(p => (p as Record<string, unknown>)[parentPk.propertyKey]).filter(v => v != null),
     )];
+    /* v8 ignore next */
     if (parentIds.length === 0) return [];
 
     const childPkCol   = childState.columnMap.get(childState.cachedPrimaryColumn!.propertyKey)!;

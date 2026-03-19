@@ -4,7 +4,7 @@ import { IQueryOperator, pgPlaceholder } from './query-operator';
 export const JsonContains = (value: object): IQueryOperator => ({
     requiresJsonSupport: true,
     buildClause: (col, i, p = pgPlaceholder) => ({
-        sql: `${col} @> ${(p ?? pgPlaceholder)(i)}::jsonb`,
+        sql: `${col} @> ${p(i)}::jsonb`,
         params: [JSON.stringify(value)],
     }),
 });
@@ -13,7 +13,7 @@ export const JsonContains = (value: object): IQueryOperator => ({
 export const JsonHasKey = (key: string): IQueryOperator => ({
     requiresJsonSupport: true,
     buildClause: (col, i, p = pgPlaceholder) => ({
-        sql: `${col} ? ${(p ?? pgPlaceholder)(i)}`,
+        sql: `${col} ? ${p(i)}`,
         params: [key],
     }),
 });
@@ -22,7 +22,7 @@ export const JsonHasKey = (key: string): IQueryOperator => ({
 export const JsonHasAllKeys = (keys: Array<string>): IQueryOperator => ({
     requiresJsonSupport: true,
     buildClause: (col, i, p = pgPlaceholder) => ({
-        sql: `${col} ?& ${(p ?? pgPlaceholder)(i)}`,
+        sql: `${col} ?& ${p(i)}`,
         params: [keys],
     }),
 });
@@ -31,7 +31,7 @@ export const JsonHasAllKeys = (keys: Array<string>): IQueryOperator => ({
 export const JsonHasAnyKey = (keys: Array<string>): IQueryOperator => ({
     requiresJsonSupport: true,
     buildClause: (col, i, p = pgPlaceholder) => ({
-        sql: `${col} ?| ${(p ?? pgPlaceholder)(i)}`,
+        sql: `${col} ?| ${p(i)}`,
         params: [keys],
     }),
 });

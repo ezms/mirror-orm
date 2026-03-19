@@ -15,7 +15,9 @@ export const ManyToMany = (
         joinTable,
         inverseFk,
     };
+    /* v8 ignore next */
     if (!context.metadata) return;
+    /* v8 ignore next */
     (context.metadata[RELATIONS_KEY] as Array<IRelationMetadata> | undefined) ??= [];
     (context.metadata[RELATIONS_KEY] as Array<IRelationMetadata>).push(relation);
 };

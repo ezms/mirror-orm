@@ -4,6 +4,11 @@ import { RepositoryState } from '../repository/repository-state';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { MoreThan } from '../operators';
+import { registry } from '../metadata/registry';
+import { AuthorFixture, BookFixture } from './fixtures/user.entity';
+
+void AuthorFixture;
+void BookFixture;
 
 class Post {
     id!: number;
@@ -24,12 +29,27 @@ const metadata: IEntityMetadata = {
     relations: [],
 };
 
+// Entity with soft-delete column
+class SoftPost { id!: number; title!: string; deletedAt!: Date | null; }
+const softMetadata: IEntityMetadata = {
+    tableName: 'soft_posts', className: 'SoftPost',
+    columns: [
+        { propertyKey: 'id',        databaseName: 'id',         primary: true,  options: {} },
+        { propertyKey: 'title',     databaseName: 'title',      primary: false, options: {} },
+        { propertyKey: 'deletedAt', databaseName: 'deleted_at', primary: false, options: {}, deletedAt: true },
+    ],
+    relations: [],
+};
+
 const makeRunner = (rows: object[] = []): IQueryRunner => ({
     query: vi.fn().mockResolvedValue(rows),
 });
 
 const makeQB = (runner: IQueryRunner) =>
     new QueryBuilder(new RepositoryState(Post, metadata), runner);
+
+const makeSoftQB = (runner: IQueryRunner) =>
+    new QueryBuilder(new RepositoryState(SoftPost, softMetadata), runner);
 
 describe('QueryBuilder', () => {
     it('builds basic SELECT from entity', () => {
@@ -143,5 +163,85 @@ describe('QueryBuilder', () => {
         expect(sql).toContain('ORDER BY "view_count" DESC');
         expect(sql).toContain('LIMIT 5');
         expect(sql).toContain('OFFSET 10');
+    });
+
+    it('where() as array produces OR-combined groups', () => {
+        const { sql, params } = makeQB(makeRunner())
+            .where([{ title: 'A' }, { title: 'B' }])
+            .build();
+        expect(sql).toContain('WHERE "title" = $1 OR "title" = $2');
+        expect(params).toEqual(['A', 'B']);
+    });
+
+    it('where() silently skips keys not in column map', () => {
+        const { sql, params } = makeQB(makeRunner())
+            .where({ unknownProp: 'x', title: 'Y' })
+            .build();
+        expect(sql).toContain('"title" = $1');
+        expect(sql).not.toContain('unknownProp');
+        expect(params).toEqual(['Y']);
+    });
+
+    it('select() passes through raw keys not in column map', () => {
+        const { sql } = makeQB(makeRunner()).select(['id', 'COUNT(*) AS total']).build();
+        expect(sql).toContain('"id"');
+        expect(sql).toContain('COUNT(*) AS total');
+    });
+
+    it('orderBy() passes through raw keys not in column map', () => {
+        const { sql } = makeQB(makeRunner()).orderBy({ 'COUNT(*)': 'DESC' }).build();
+        expect(sql).toContain('ORDER BY COUNT(*) DESC');
+    });
+});
+
+// ─── QueryBuilder — leftJoin ──────────────────────────────────────────────────
+
+describe('QueryBuilder — leftJoin', () => {
+    const makeBookQB = (runner: IQueryRunner) =>
+        new QueryBuilder(new RepositoryState(BookFixture, registry.getEntity('BookFixture')!), runner);
+
+    it('leftJoin builds correct LEFT JOIN clause', () => {
+        const { sql } = makeBookQB(makeRunner()).leftJoin('author', 'a').build();
+        expect(sql).toContain('LEFT JOIN "authors" "a" ON');
+        expect(sql).toContain('"author_id"');
+    });
+
+    it('leftJoin throws for unknown relation key', () => {
+        expect(() => makeBookQB(makeRunner()).leftJoin('nonExistent', 'x')).toThrow(/"nonExistent"/);
+    });
+});
+
+// ─── QueryBuilder — soft-delete ───────────────────────────────────────────────
+
+describe('QueryBuilder — soft-delete', () => {
+    it('build() auto-appends IS NULL for deletedAt column with no WHERE', () => {
+        const { sql } = makeSoftQB(makeRunner()).build();
+        expect(sql).toContain('WHERE "deleted_at" IS NULL');
+    });
+
+    it('build() appends AND IS NULL when WHERE already exists', () => {
+        const { sql } = makeSoftQB(makeRunner()).where({ title: 'X' }).build();
+        expect(sql).toContain('"title" = $1');
+        expect(sql).toContain('AND "deleted_at" IS NULL');
+    });
+
+    it('getCount() appends IS NULL to count query', async () => {
+        const runner = makeRunner([{ count: '3' }]);
+        await makeSoftQB(runner).getCount();
+        const sql = (runner.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+        expect(sql).toContain('"deleted_at" IS NULL');
+    });
+
+    it('where() single group with multiple conditions wraps in parens', () => {
+        const { sql } = makeQB(makeRunner()).where({ title: 'A', viewCount: MoreThan(0) }).build();
+        expect(sql).toContain('("title" = $1 AND "view_count" > $2)');
+    });
+
+    it('getCount() with WHERE appends AND IS NULL (not WHERE IS NULL)', async () => {
+        const runner = makeRunner([{ count: '1' }]);
+        await makeSoftQB(runner).where({ title: 'X' }).getCount();
+        const sql = (runner.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+        expect(sql).toContain('"title" = $1');
+        expect(sql).toContain('AND "deleted_at" IS NULL');
     });
 });

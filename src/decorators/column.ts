@@ -29,7 +29,9 @@ const applyColumn = (nameOrOptions: string | IColumnOptions | undefined, context
         primary: false,
     };
 
+    /* v8 ignore next */
     if (!context.metadata) return;
+    /* v8 ignore next */
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };

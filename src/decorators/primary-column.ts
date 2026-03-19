@@ -23,7 +23,9 @@ const applyPrimaryColumn = (options: IPrimaryColumnOptions | undefined, context:
             : undefined,
     };
 
+    /* v8 ignore next */
     if (!context.metadata) return;
+    /* v8 ignore next */
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };

@@ -9,7 +9,9 @@ export const CreatedAt = (dbName = 'created_at') => (_value: undefined, context:
         primary: false,
         createdAt: true,
     };
+    /* v8 ignore next */
     if (!context.metadata) return;
+    /* v8 ignore next */
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };

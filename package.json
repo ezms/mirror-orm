@@ -1,7 +1,7 @@
 {
     "name": "mirror-orm",
     "version": "0.1.0-alpha.5",
-    "description": "",
+    "description": "Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server using Stage 3 decorators",
     "main": "dist/index.js",
     "module": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -26,9 +26,22 @@
     "files": [
         "dist"
     ],
-    "keywords": [],
+    "keywords": [
+        "orm",
+        "typescript",
+        "postgres",
+        "postgresql",
+        "sqlite",
+        "mysql",
+        "sql-server",
+        "mssql",
+        "decorator",
+        "stage3-decorators",
+        "query-builder",
+        "multi-dialect"
+    ],
     "author": "",
-    "license": "ISC",
+    "license": "Apache-2.0",
     "packageManager": "pnpm@10.31.0",
     "dependencies": {
         "@paralleldrive/cuid2": "^3.3.0"

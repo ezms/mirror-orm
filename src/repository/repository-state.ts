@@ -164,26 +164,25 @@ export class RepositoryState<T> {
 
     private buildStaticWhereFilters(): string {
         const clauses: Array<string> = [];
-        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn) {
+        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn)
             clauses.push(`${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`);
-        }
-        if (this.cachedDeletedAtColumn) {
+        if (this.cachedDeletedAtColumn)
             clauses.push(`${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`);
-        }
         return clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
     }
 
     private buildFindByIdStatement(): INamedQuery | null {
         if (!this.cachedPrimaryColumn) return null;
         const pk = this.columnMap.get(this.cachedPrimaryColumn.propertyKey)!;
-        const staticFilters = this.buildStaticWhereFilters();
-        const pkClause = `${pk.quotedDatabaseName} = ${this.placeholder(1)}`;
-        const whereText = staticFilters
-            ? `${staticFilters} AND ${pkClause}`
-            : ` WHERE ${pkClause}`;
+        const clauses: Array<string> = [];
+        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn)
+            clauses.push(`${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`);
+        if (this.cachedDeletedAtColumn)
+            clauses.push(`${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`);
+        clauses.push(`${pk.quotedDatabaseName} = ${this.placeholder(1)}`);
         return {
             name: `mirror_${this.metadata.className}_fbi`,
-            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${whereText}`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName} WHERE ${clauses.join(' AND ')}`,
         };
     }
 

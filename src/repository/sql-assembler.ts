@@ -99,10 +99,7 @@ export class SqlAssembler<T> {
             }
         }
 
-        if (this.state.metadata.discriminatorValue && this.state.metadata.discriminatorColumn) {
-            const discClause = `${this.state.quoteIdentifier(this.state.metadata.discriminatorColumn)} = '${this.state.metadata.discriminatorValue}'`;
-            whereSql += whereSql ? ` AND ${discClause}` : ` WHERE ${discClause}`;
-        }
+        whereSql = this.appendDiscriminatorFilter(whereSql);
 
         const sdCol = this.state.cachedDeletedAtColumn;
         if (sdCol && !options.withDeleted) {
@@ -135,6 +132,7 @@ export class SqlAssembler<T> {
     public buildCount(where?: IFindOptions<T>['where'], withDeleted?: boolean): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
         let whereSql = this.buildWhere(where, params);
+        whereSql = this.appendDiscriminatorFilter(whereSql);
         const sdCol = this.state.cachedDeletedAtColumn;
         if (sdCol && !withDeleted) {
             const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;
@@ -147,11 +145,7 @@ export class SqlAssembler<T> {
     }
 
     public buildInsert(record: Record<string, unknown>, isIdentity: boolean): { sql: string; params: Array<unknown> } {
-        const effectiveRecord = { ...record };
-        if (this.state.metadata.discriminatorValue && this.state.metadata.discriminatorColumn) {
-            const discCol = this.state.metadata.columns.find(c => c.databaseName === this.state.metadata.discriminatorColumn);
-            if (discCol) effectiveRecord[discCol.propertyKey] = this.state.metadata.discriminatorValue;
-        }
+        const effectiveRecord = this.withDiscriminator(record);
         const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && effectiveRecord[c.propertyKey] !== undefined);
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const params = columns.map(c => effectiveRecord[c.propertyKey]);
@@ -165,10 +159,11 @@ export class SqlAssembler<T> {
     }
 
     public buildBulkInsert(records: Record<string, unknown>[], isIdentity: boolean): { sql: string; params: Array<unknown> } {
-        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && records.some(r => r[c.propertyKey] !== undefined));
+        const effective = records.map(r => this.withDiscriminator(r));
+        const columns = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && effective.some(r => r[c.propertyKey] !== undefined));
         const names = columns.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
         const allParams: Array<unknown> = [];
-        const rowPlaceholders = records.map(record => {
+        const rowPlaceholders = effective.map(record => {
             const placeholders = columns.map(c => {
                 allParams.push(record[c.propertyKey]);
                 return this.state.placeholder(allParams.length);
@@ -222,7 +217,7 @@ export class SqlAssembler<T> {
             params.push(record[c.propertyKey]);
             return `${this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName} = ${this.state.placeholder(params.length)}`;
         });
-        const whereSql = this.buildWhere(where, params);
+        const whereSql = this.appendDiscriminatorFilter(this.buildWhere(where, params));
         return {
             sql: `UPDATE ${this.state.quotedTableName} SET ${setClauses.join(', ')}${whereSql}${this.state.supportsReturning ? ' RETURNING 1' : ''}`,
             params,
@@ -231,8 +226,9 @@ export class SqlAssembler<T> {
 
     public buildDelete(where: IFindOptions<T>['where']): { sql: string; params: Array<unknown> } {
         const params: Array<unknown> = [];
+        const whereSql = this.appendDiscriminatorFilter(this.buildWhere(where, params));
         return {
-            sql: `DELETE FROM ${this.state.quotedTableName}${this.buildWhere(where, params)}${this.state.supportsReturning ? ' RETURNING 1' : ''}`,
+            sql: `DELETE FROM ${this.state.quotedTableName}${whereSql}${this.state.supportsReturning ? ' RETURNING 1' : ''}`,
             params,
         };
     }
@@ -242,11 +238,12 @@ export class SqlAssembler<T> {
         conflictPropertyKeys: Array<string>,
         updatePropertyKeys?: Array<string>,
     ): { sql: string; params: Array<unknown> } {
+        const effectiveRecord = this.withDiscriminator(record);
         const pk = this.state.cachedPrimaryColumn;
         const isIdentity = pk?.generation?.strategy === 'identity';
-        const insertCols = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && record[c.propertyKey] !== undefined);
+        const insertCols = this.state.metadata.columns.filter(c => (!c.primary || !isIdentity) && effectiveRecord[c.propertyKey] !== undefined);
         const names = insertCols.map(c => this.state.columnMap.get(c.propertyKey)!.quotedDatabaseName);
-        const params = insertCols.map(c => record[c.propertyKey]);
+        const params = insertCols.map(c => effectiveRecord[c.propertyKey]);
         const placeholders = params.map((_, i) => this.state.placeholder(i + 1));
 
         const conflictCols = conflictPropertyKeys
@@ -279,6 +276,19 @@ export class SqlAssembler<T> {
         const params: Array<unknown> = [];
         const inClause = this.state.buildArrayInClause(pk.quotedDatabaseName, ids, params);
         return { sql: `DELETE FROM ${this.state.quotedTableName} WHERE ${inClause}`, params };
+    }
+
+    private withDiscriminator(record: Record<string, unknown>): Record<string, unknown> {
+        if (!this.state.metadata.discriminatorValue || !this.state.metadata.discriminatorColumn) return record;
+        const discCol = this.state.metadata.columns.find(c => c.databaseName === this.state.metadata.discriminatorColumn);
+        if (!discCol) return record;
+        return { ...record, [discCol.propertyKey]: this.state.metadata.discriminatorValue };
+    }
+
+    private appendDiscriminatorFilter(whereSql: string): string {
+        if (!this.state.metadata.discriminatorValue || !this.state.metadata.discriminatorColumn) return whereSql;
+        const clause = `${this.state.quoteIdentifier(this.state.metadata.discriminatorColumn)} = '${this.state.metadata.discriminatorValue}'`;
+        return whereSql ? `${whereSql} AND ${clause}` : ` WHERE ${clause}`;
     }
 
     private buildMtoInfo(relation: IRelationMetadata, relatedState: RepositoryState<unknown>): ManyToOneInfo {

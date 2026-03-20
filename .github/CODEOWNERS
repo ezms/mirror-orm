@@ -1,0 +1,19 @@
+# Global fallback — all files require review from the owner
+* @ezms
+
+# Workflows, release config and project config
+.github/           @ezms
+.changeset/        @ezms
+package.json       @ezms
+tsconfig*.json     @ezms
+eslint.config.mjs  @ezms
+.prettierrc        @ezms
+.nvmrc             @ezms
+
+# Docs
+README.md          @ezms
+CONTRIBUTING.md    @ezms
+CHANGELOG.md       @ezms
+
+# Benchmarks
+benchmark/         @ezms

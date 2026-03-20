@@ -1,9 +1,11 @@
-import mssql from 'mssql';
+import type * as MssqlNS from 'mssql';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
 import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
+
+type MssqlModule = typeof MssqlNS;
 
 function resolveParams(input: string | INamedQuery, params?: Array<unknown>): Array<unknown> {
     if (params && params.length > 0) return params;
@@ -11,7 +13,7 @@ function resolveParams(input: string | INamedQuery, params?: Array<unknown>): Ar
     return [];
 }
 
-function addInputs(request: mssql.Request, params: Array<unknown>): void {
+function addInputs(request: MssqlNS.Request, params: Array<unknown>): void {
     params.forEach((p, i) => request.input(`p${i + 1}`, p));
 }
 
@@ -22,32 +24,35 @@ function columnsToOrder(columns: Record<string, { index: number }>): string[] {
 }
 
 class MssqlTransactionRunner implements ITransactionRunner {
-    constructor(private readonly transaction: mssql.Transaction) {}
+    constructor(
+        private readonly transaction: MssqlNS.Transaction,
+        private readonly sql: MssqlModule,
+    ) {}
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
-        const sql = typeof input === 'string' ? input : input.text;
+        const sqlText = typeof input === 'string' ? input : input.text;
         const p = resolveParams(input, params);
         try {
-            const request = new mssql.Request(this.transaction);
+            const request = new this.sql.Request(this.transaction);
             addInputs(request, p);
-            const result = await request.query<T>(sql);
+            const result = await request.query<T>(sqlText);
             return result.recordset;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sqlText, error);
         }
     }
 
     public async queryArray<T extends Array<unknown> = Array<unknown>>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
-        const sql = typeof input === 'string' ? input : input.text;
+        const sqlText = typeof input === 'string' ? input : input.text;
         const p = resolveParams(input, params);
         try {
-            const request = new mssql.Request(this.transaction);
+            const request = new this.sql.Request(this.transaction);
             addInputs(request, p);
-            const result = await request.query(sql);
+            const result = await request.query(sqlText);
             const colOrder = columnsToOrder(result.recordset.columns as Record<string, { index: number }>);
-            return result.recordset.map(row => colOrder.map(col => (row as Record<string, unknown>)[col])) as Array<T>;
+            return result.recordset.map((row: Record<string, unknown>) => colOrder.map(col => row[col])) as Array<T>;
         } catch (error) {
-            throw new QueryError(sql, error);
+            throw new QueryError(sqlText, error);
         }
     }
 
@@ -65,11 +70,13 @@ class MssqlTransactionRunner implements ITransactionRunner {
 }
 
 export class MssqlAdapter implements IDriverAdapter {
-    private pool: mssql.ConnectionPool | null = null;
+    private pool: MssqlNS.ConnectionPool | null = null;
+    private sql: MssqlModule | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
-        const config: mssql.config = options.url
-            ? { server: options.url } as mssql.config
+        this.sql = await import('mssql');
+        const config: MssqlNS.config = options.url
+            ? { server: options.url } as MssqlNS.config
             : {
                 server: options.host ?? 'localhost',
                 port: options.port,
@@ -78,11 +85,11 @@ export class MssqlAdapter implements IDriverAdapter {
                 password: options.password,
                 options: { trustServerCertificate: true },
             };
-        this.pool = await new mssql.ConnectionPool(config).connect();
+        this.pool = await new this.sql.ConnectionPool(config).connect();
     }
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
-        if (!this.pool) throw new Error('Not connected');
+        if (!this.pool || !this.sql) throw new Error('Not connected');
         const sql = typeof input === 'string' ? input : input.text;
         const p = resolveParams(input, params);
         try {
@@ -104,7 +111,7 @@ export class MssqlAdapter implements IDriverAdapter {
             addInputs(request, p);
             const result = await request.query(sql);
             const colOrder = columnsToOrder(result.recordset.columns as Record<string, { index: number }>);
-            return result.recordset.map(row => colOrder.map(col => (row as Record<string, unknown>)[col])) as Array<T>;
+            return result.recordset.map((row: Record<string, unknown>) => colOrder.map(col => row[col])) as Array<T>;
         } catch (error) {
             throw new QueryError(sql, error);
         }
@@ -151,14 +158,15 @@ export class MssqlAdapter implements IDriverAdapter {
     }
 
     public async acquireTransactionRunner(): Promise<ITransactionRunner> {
-        if (!this.pool) throw new Error('Not connected');
-        const transaction = new mssql.Transaction(this.pool);
+        if (!this.pool || !this.sql) throw new Error('Not connected');
+        const transaction = new this.sql.Transaction(this.pool);
         await transaction.begin();
-        return new MssqlTransactionRunner(transaction);
+        return new MssqlTransactionRunner(transaction, this.sql);
     }
 
     public async disconnect(): Promise<void> {
         await this.pool?.close();
         this.pool = null;
+        this.sql = null;
     }
 }

@@ -1,4 +1,4 @@
-import { Pool, PoolClient, types } from 'pg';
+import type { Pool, PoolClient, types as PgTypes } from 'pg';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
@@ -6,21 +6,27 @@ import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
 
 const RAW_STRING = (val: string) => val;
-const ARRAY_QUERY_TYPES = {
-    getTypeParser: (typeId: number, format?: 'text' | 'binary') => {
-        if (
-            typeId === types.builtins.TIMESTAMPTZ ||
-            typeId === types.builtins.TIMESTAMP ||
-            typeId === types.builtins.DATE ||
-            typeId === types.builtins.INTERVAL ||
-            typeId === 1231 || typeId === 1115 || typeId === 1185 || typeId === 1187 || typeId === 1182
-        ) return RAW_STRING;
-        return types.getTypeParser(typeId, format);
-    },
-};
+
+function makeArrayQueryTypes(types: typeof PgTypes) {
+    return {
+        getTypeParser: (typeId: number, format?: 'text' | 'binary') => {
+            if (
+                typeId === types.builtins.TIMESTAMPTZ ||
+                typeId === types.builtins.TIMESTAMP ||
+                typeId === types.builtins.DATE ||
+                typeId === types.builtins.INTERVAL ||
+                typeId === 1231 || typeId === 1115 || typeId === 1185 || typeId === 1187 || typeId === 1182
+            ) return RAW_STRING;
+            return types.getTypeParser(typeId, format);
+        },
+    };
+}
 
 class PostgresTransactionRunner implements ITransactionRunner {
-    constructor(private readonly client: PoolClient) {}
+    constructor(
+        private readonly client: PoolClient,
+        private readonly arrayQueryTypes: ReturnType<typeof makeArrayQueryTypes>,
+    ) {}
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
         const result = typeof input === 'string'
@@ -33,8 +39,8 @@ class PostgresTransactionRunner implements ITransactionRunner {
 
     public async queryArray<T extends unknown[] = unknown[]>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
         const config = typeof input === 'string'
-            ? { text: input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES, ...(params && params.length > 0 ? { values: params } : {}) }
-            : { ...input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES };
+            ? { text: input, rowMode: 'array' as const, types: this.arrayQueryTypes, ...(params && params.length > 0 ? { values: params } : {}) }
+            : { ...input, rowMode: 'array' as const, types: this.arrayQueryTypes };
         const result = await this.client.query(config);
         return result.rows as Array<T>;
     }
@@ -54,8 +60,11 @@ class PostgresTransactionRunner implements ITransactionRunner {
 
 export class PostgresAdapter implements IDriverAdapter {
     private pool: Pool | null = null;
+    private arrayQueryTypes: ReturnType<typeof makeArrayQueryTypes> | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
+        const { Pool, types } = await import('pg');
+        this.arrayQueryTypes = makeArrayQueryTypes(types);
         this.pool = new Pool(
             options.url
                 ? { connectionString: options.url, ssl: options.ssl }
@@ -86,12 +95,12 @@ export class PostgresAdapter implements IDriverAdapter {
     }
 
     public async queryArray<T extends unknown[] = unknown[]>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
-        if (!this.pool) throw new Error('Not connected');
+        if (!this.pool || !this.arrayQueryTypes) throw new Error('Not connected');
         const sqlText = typeof input === 'string' ? input : input.text;
         try {
             const config = typeof input === 'string'
-                ? { text: input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES, ...(params && params.length > 0 ? { values: params } : {}) }
-                : { ...input, rowMode: 'array' as const, types: ARRAY_QUERY_TYPES };
+                ? { text: input, rowMode: 'array' as const, types: this.arrayQueryTypes, ...(params && params.length > 0 ? { values: params } : {}) }
+                : { ...input, rowMode: 'array' as const, types: this.arrayQueryTypes };
             const result = await this.pool.query(config);
             return result.rows as Array<T>;
         } catch (error) {
@@ -100,7 +109,7 @@ export class PostgresAdapter implements IDriverAdapter {
     }
 
     public async *queryStream(sql: string, params?: Array<unknown>, batchSize = 200): AsyncIterable<unknown[]> {
-        if (!this.pool) throw new Error('Not connected');
+        if (!this.pool || !this.arrayQueryTypes) throw new Error('Not connected');
         const client = await this.pool.connect();
         try {
             await client.query('BEGIN');
@@ -109,7 +118,7 @@ export class PostgresAdapter implements IDriverAdapter {
                 : await client.query(`DECLARE mirror_cursor CURSOR FOR ${sql}`);
             void declareSql;
             while (true) {
-                const result = await client.query({ text: `FETCH ${batchSize} FROM mirror_cursor`, rowMode: 'array', types: ARRAY_QUERY_TYPES });
+                const result = await client.query({ text: `FETCH ${batchSize} FROM mirror_cursor`, rowMode: 'array', types: this.arrayQueryTypes });
                 if (result.rows.length === 0) break;
                 yield* result.rows as unknown[][];
             }
@@ -124,10 +133,10 @@ export class PostgresAdapter implements IDriverAdapter {
     }
 
     public async acquireTransactionRunner(): Promise<ITransactionRunner> {
-        if (!this.pool) throw new Error('Not connected');
+        if (!this.pool || !this.arrayQueryTypes) throw new Error('Not connected');
         const client = await this.pool.connect();
         await client.query('BEGIN');
-        return new PostgresTransactionRunner(client);
+        return new PostgresTransactionRunner(client, this.arrayQueryTypes);
     }
 
     public async disconnect(): Promise<void> {

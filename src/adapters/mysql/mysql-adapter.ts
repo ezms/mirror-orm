@@ -1,4 +1,4 @@
-import mysql, { Pool, PoolConnection } from 'mysql2/promise';
+import type { Pool, PoolConnection } from 'mysql2/promise';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
@@ -56,6 +56,7 @@ export class MysqlAdapter implements IDriverAdapter {
     private pool: Pool | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
+        const mysql = await import('mysql2/promise');
         this.pool = mysql.createPool(
             options.url
                 ? { uri: options.url, waitForConnections: true }

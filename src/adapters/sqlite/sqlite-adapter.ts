@@ -1,4 +1,4 @@
-import Database, { Database as DatabaseType } from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { IConnectionOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
@@ -56,6 +56,7 @@ export class SqliteAdapter implements IDriverAdapter {
     private db: DatabaseType | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
+        const { default: Database } = await import('better-sqlite3');
         const file = options.database ?? options.url ?? ':memory:';
         this.db = new Database(file);
         this.db.pragma('journal_mode = WAL');

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { describe, expect, it, vi, type Mock } from 'vitest';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { RepositoryState } from '../repository/repository-state';
 import {
@@ -97,7 +97,9 @@ describe('loadRelationsForEntities — owner side (ManyToOne)', () => {
         await loadRelationsForEntities([book], state, ['author'], runner);
 
         expect(mockQuery).toHaveBeenCalledOnce();
-        expect((book as Record<string, unknown>)['author']).toMatchObject({
+        expect(
+            (book as unknown as Record<string, unknown>)['author'],
+        ).toMatchObject({
             id: 1,
             name: 'Martin',
         });

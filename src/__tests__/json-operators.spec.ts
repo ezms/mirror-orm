@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Column } from '../decorators/column';
 import { Entity } from '../decorators/entity';
 import { PrimaryColumn } from '../decorators/primary-column';
-import { type IDialect, MySQLDialect, PostgresDialect, SQLiteDialect } from '../dialects';
+import {
+    type IDialect,
+    MySQLDialect,
+    PostgresDialect,
+    SQLiteDialect,
+} from '../dialects';
 import {
     JsonContains,
     JsonHasAllKeys,

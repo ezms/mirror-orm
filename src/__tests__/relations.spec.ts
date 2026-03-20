@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Repository } from '../repository/repository';
 import {

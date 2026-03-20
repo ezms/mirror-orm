@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Column } from '../decorators/column';
 import { Entity } from '../decorators/entity';
 import { PrimaryColumn } from '../decorators/primary-column';
@@ -27,7 +27,7 @@ function makeRunner(
         query: vi.fn(async () => {
             calls.push('query');
             return rows;
-        }),
+        }) as unknown as IQueryRunner['query'],
     };
 }
 
@@ -73,7 +73,7 @@ describe('read replica routing', () => {
     });
 
     it('save routes to primary', async () => {
-        const { repo, primary, replica } = makeRepo(
+        const { repo, primary } = makeRepo(
             [{ id: 1, name: 'A' }], // primary returns the INSERT result
             [{ id: 1, name: 'A' }], // replica for the findById after insert
         );

@@ -8,7 +8,10 @@ export class QueryError extends MirrorError {
         public readonly originalError: unknown,
         public readonly params?: Array<unknown>,
     ) {
-        const cause = originalError instanceof Error ? originalError.message : String(originalError);
+        const cause =
+            originalError instanceof Error
+                ? originalError.message
+                : String(originalError);
         const detail = QueryError.verbose
             ? `\n  SQL: ${query}${params?.length ? `\n  Params: ${JSON.stringify(params)}` : ''}`
             : '';

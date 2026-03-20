@@ -1,12 +1,27 @@
-import { EntityNotFoundError, GenerationStrategyError, MissingPrimaryKeyError, NoPrimaryColumnError, OptimisticLockError, QueryError } from '../errors';
+import {
+    EntityNotFoundError,
+    GenerationStrategyError,
+    MissingPrimaryKeyError,
+    NoPrimaryColumnError,
+    OptimisticLockError,
+    QueryError,
+} from '../errors';
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IFindOptions } from '../interfaces/find-options';
 import { IPaginatedResult, IPaginationOptions } from '../interfaces/pagination';
 import { IGenerationOptions } from '../interfaces/generation-strategy';
 import { IQueryRunner } from '../interfaces/query-runner';
-import { CascadeType, IRelationMetadata } from '../interfaces/relation-metadata';
-import { generateCuid2, generateUlid, generateUuidV4, generateUuidV7 } from '../utils/generators';
+import {
+    CascadeType,
+    IRelationMetadata,
+} from '../interfaces/relation-metadata';
+import {
+    generateCuid2,
+    generateUlid,
+    generateUuidV4,
+    generateUuidV7,
+} from '../utils/generators';
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
 import { QueryBuilder } from '../query-builder/query-builder';
@@ -23,8 +38,17 @@ export class Repository<T> {
     private readonly assembler: SqlAssembler<T>;
     private readonly alsEnabled: boolean;
 
-    constructor(target: new () => T, runner: IQueryRunner, metadata: IEntityMetadata);
-    constructor(state: RepositoryState<T>, runner: IQueryRunner, alsEnabled?: boolean, replicaRunner?: IQueryRunner);
+    constructor(
+        target: new () => T,
+        runner: IQueryRunner,
+        metadata: IEntityMetadata,
+    );
+    constructor(
+        state: RepositoryState<T>,
+        runner: IQueryRunner,
+        alsEnabled?: boolean,
+        replicaRunner?: IQueryRunner,
+    );
     constructor(
         targetOrState: (new () => T) | RepositoryState<T>,
         runner: IQueryRunner,
@@ -34,9 +58,13 @@ export class Repository<T> {
         this.runner = runner;
         if (targetOrState instanceof RepositoryState) {
             this.state = targetOrState;
-            this.alsEnabled = typeof metadataOrAls === 'boolean' ? metadataOrAls : true;
+            this.alsEnabled =
+                typeof metadataOrAls === 'boolean' ? metadataOrAls : true;
         } else {
-            this.state = new RepositoryState(targetOrState, metadataOrAls as IEntityMetadata);
+            this.state = new RepositoryState(
+                targetOrState,
+                metadataOrAls as IEntityMetadata,
+            );
             this.alsEnabled = true;
         }
         this.replicaRunner = replicaRunner ?? runner;
@@ -44,41 +72,59 @@ export class Repository<T> {
     }
 
     private get activeRunner(): IQueryRunner {
-        return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.runner;
+        return (
+            (this.alsEnabled ? transactionStore.getStore() : undefined) ??
+            this.runner
+        );
     }
 
     private get readRunner(): IQueryRunner {
-        return (this.alsEnabled ? transactionStore.getStore() : undefined) ?? this.replicaRunner;
+        return (
+            (this.alsEnabled ? transactionStore.getStore() : undefined) ??
+            this.replicaRunner
+        );
     }
 
     private async runHooks(entity: T, methods: Array<string>): Promise<void> {
         const rec = entity as Record<string, unknown>;
         for (const method of methods)
-            if (typeof rec[method] === 'function') await (rec[method] as () => Promise<void>)();
+            if (typeof rec[method] === 'function')
+                await (rec[method] as () => Promise<void>)();
     }
 
-    private async hydrateWithHooks(rows: Array<Record<string, unknown>>): Promise<Array<T>> {
-        const entities = rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+    private async hydrateWithHooks(
+        rows: Array<Record<string, unknown>>,
+    ): Promise<Array<T>> {
+        const entities = rows.map((row) =>
+            this.captureSnapshot(this.state.hydrator(row)),
+        );
         if (this.state.hooks.afterLoad.length > 0)
-            for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
+            for (const entity of entities)
+                await this.runHooks(entity, this.state.hooks.afterLoad);
         return entities;
     }
 
     private async hydrateArrayRows(rows: Array<unknown[]>): Promise<Array<T>> {
-        const entities = rows.map(row => this.captureSnapshot(this.state.arrayHydrator(row)));
+        const entities = rows.map((row) =>
+            this.captureSnapshot(this.state.arrayHydrator(row)),
+        );
         if (this.state.hooks.afterLoad.length > 0)
-            for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
+            for (const entity of entities)
+                await this.runHooks(entity, this.state.hooks.afterLoad);
         return entities;
     }
 
     private captureSnapshot(entity: T): T {
         const cols = this.state.metadata.columns;
         const snap = new Array<unknown>(cols.length);
-        const rec  = entity as Record<string, unknown>;
+        const rec = entity as Record<string, unknown>;
         for (let i = 0; i < cols.length; i++) {
             const col = cols[i];
             if (col.embedOwnerKey) {
-                const owner = rec[col.embedOwnerKey] as Record<string, unknown> | null | undefined;
+                const owner = rec[col.embedOwnerKey] as
+                    | Record<string, unknown>
+                    | null
+                    | undefined;
                 snap[i] = owner?.[col.embedSourceKey!];
             } else {
                 snap[i] = rec[col.propertyKey];
@@ -95,7 +141,10 @@ export class Repository<T> {
     public async *findStream(options: IFindOptions<T> = {}): AsyncGenerator<T> {
         const plan = this.assembler.buildFind(options);
         const runner = this.readRunner;
-        if (!runner.queryStream) throw new Error('queryStream is not supported by the current adapter');
+        if (!runner.queryStream)
+            throw new Error(
+                'queryStream is not supported by the current adapter',
+            );
         for await (const row of runner.queryStream(plan.sql, plan.params)) {
             yield this.captureSnapshot(this.state.arrayHydrator(row));
         }
@@ -118,15 +167,22 @@ export class Repository<T> {
 
     public async findById(id: number | string): Promise<T | null> {
         const stmt = this.state.findByIdStatement;
-        if (!stmt) throw new NoPrimaryColumnError(this.state.metadata.className);
+        if (!stmt)
+            throw new NoPrimaryColumnError(this.state.metadata.className);
         const runner = this.readRunner;
         try {
             if (runner.queryArray) {
-                const rows = await runner.queryArray<unknown[]>({ ...stmt, values: [id] });
+                const rows = await runner.queryArray<unknown[]>({
+                    ...stmt,
+                    values: [id],
+                });
                 if (rows.length === 0) return null;
                 return (await this.hydrateArrayRows(rows))[0];
             }
-            const rows = await runner.query<Record<string, unknown>>({ ...stmt, values: [id] });
+            const rows = await runner.query<Record<string, unknown>>({
+                ...stmt,
+                values: [id],
+            });
             if (rows.length === 0) return null;
             return (await this.hydrateWithHooks(rows))[0];
         } catch (error) {
@@ -137,7 +193,10 @@ export class Repository<T> {
     public async find(options: IFindOptions<T> = {}): Promise<Array<T>> {
         const relationTree = buildRelationTree(options.relations ?? []);
         const topRelations = [...relationTree.keys()];
-        const plan = this.assembler.buildFind({ ...options, relations: topRelations });
+        const plan = this.assembler.buildFind({
+            ...options,
+            relations: topRelations,
+        });
         const runner = this.readRunner;
         const noRelations =
             plan.mtoRelations.length === 0 &&
@@ -146,11 +205,17 @@ export class Repository<T> {
             plan.mtmRelations.length === 0;
         try {
             if (noRelations && runner.queryArray) {
-                const rows = await runner.queryArray<unknown[]>(plan.sql, plan.params);
+                const rows = await runner.queryArray<unknown[]>(
+                    plan.sql,
+                    plan.params,
+                );
                 return this.hydrateArrayRows(rows);
             }
 
-            const rows = await runner.query<Record<string, unknown>>(plan.sql, plan.params);
+            const rows = await runner.query<Record<string, unknown>>(
+                plan.sql,
+                plan.params,
+            );
             const entities = this.hydrateMainRows(rows, plan);
 
             if (rows.length > 0) {
@@ -159,12 +224,37 @@ export class Repository<T> {
                     plan.otoInverseRelations.length > 0 ||
                     plan.mtmRelations.length > 0;
                 if (hasRelations) {
-                    const mainPkDbName = this.state.cachedPrimaryColumn!.databaseName;
-                    const mainIds = rows.map(row => row[mainPkDbName]);
+                    const mainPkDbName =
+                        this.state.cachedPrimaryColumn!.databaseName;
+                    const mainIds = rows.map((row) => row[mainPkDbName]);
                     await Promise.all([
-                        ...plan.otmRelations.map(r => this.loadOtmRelation(entities, rows, mainPkDbName, mainIds, r)),
-                        ...plan.otoInverseRelations.map(r => this.loadOtoInverseRelation(entities, rows, mainPkDbName, mainIds, r)),
-                        ...plan.mtmRelations.map(r => this.loadMtmRelation(entities, rows, mainPkDbName, mainIds, r)),
+                        ...plan.otmRelations.map((r) =>
+                            this.loadOtmRelation(
+                                entities,
+                                rows,
+                                mainPkDbName,
+                                mainIds,
+                                r,
+                            ),
+                        ),
+                        ...plan.otoInverseRelations.map((r) =>
+                            this.loadOtoInverseRelation(
+                                entities,
+                                rows,
+                                mainPkDbName,
+                                mainIds,
+                                r,
+                            ),
+                        ),
+                        ...plan.mtmRelations.map((r) =>
+                            this.loadMtmRelation(
+                                entities,
+                                rows,
+                                mainPkDbName,
+                                mainIds,
+                                r,
+                            ),
+                        ),
                     ]);
                 }
 
@@ -172,23 +262,35 @@ export class Repository<T> {
                 const nestedWork: Array<Promise<void>> = [];
                 for (const [relName, subRelations] of relationTree) {
                     if (subRelations.length === 0) continue;
-                    const relation = this.state.metadata.relations.find(r => r.propertyKey === relName);
+                    const relation = this.state.metadata.relations.find(
+                        (r) => r.propertyKey === relName,
+                    );
                     if (!relation) continue;
                     const relatedState = this.state.getRelatedState(relation);
                     const relatedEntities: Array<unknown> = [];
                     for (const entity of entities) {
-                        const val = (entity as Record<string, unknown>)[relName];
+                        const val = (entity as Record<string, unknown>)[
+                            relName
+                        ];
                         if (Array.isArray(val)) relatedEntities.push(...val);
                         else if (val != null) relatedEntities.push(val);
                     }
                     if (relatedEntities.length > 0)
-                        nestedWork.push(loadRelationsForEntities(relatedEntities, relatedState, subRelations, this.readRunner));
+                        nestedWork.push(
+                            loadRelationsForEntities(
+                                relatedEntities,
+                                relatedState,
+                                subRelations,
+                                this.readRunner,
+                            ),
+                        );
                 }
                 await Promise.all(nestedWork);
             }
 
             if (this.state.hooks.afterLoad.length > 0)
-                for (const entity of entities) await this.runHooks(entity, this.state.hooks.afterLoad);
+                for (const entity of entities)
+                    await this.runHooks(entity, this.state.hooks.afterLoad);
 
             return entities;
         } catch (error) {
@@ -196,14 +298,20 @@ export class Repository<T> {
         }
     }
 
-    private hydrateMainRows(rows: Array<Record<string, unknown>>, plan: FindPlan): Array<T> {
-        return rows.map(row => {
-            const entity = this.captureSnapshot(this.state.hydrator(row)) as Record<string, unknown>;
+    private hydrateMainRows(
+        rows: Array<Record<string, unknown>>,
+        plan: FindPlan,
+    ): Array<T> {
+        return rows.map((row) => {
+            const entity = this.captureSnapshot(
+                this.state.hydrator(row),
+            ) as Record<string, unknown>;
             for (const mto of plan.mtoRelations) {
                 const pkRowKey = `${mto.prefix}${mto.pkDbName}`;
-                entity[mto.relation.propertyKey] = row[pkRowKey] !== null && row[pkRowKey] !== undefined
-                    ? mto.prefixedHydrator(row)
-                    : null;
+                entity[mto.relation.propertyKey] =
+                    row[pkRowKey] !== null && row[pkRowKey] !== undefined
+                        ? mto.prefixedHydrator(row)
+                        : null;
             }
             return entity as T;
         });
@@ -217,9 +325,16 @@ export class Repository<T> {
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
         const otmParams: Array<unknown> = [];
-        const otmInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otmParams);
+        const otmInClause = relatedState.buildArrayInClause(
+            relatedState.quoteIdentifier(relation.foreignKey),
+            mainIds,
+            otmParams,
+        );
         const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otmInClause}`;
-        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, otmParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(
+            sql,
+            otmParams,
+        );
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const fkVal = relRow[relation.foreignKey];
@@ -227,7 +342,8 @@ export class Repository<T> {
             grouped.get(fkVal)!.push(relatedState.hydrator(relRow));
         }
         for (let i = 0; i < entities.length; i++)
-            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? [];
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] =
+                grouped.get(rows[i][mainPkDbName]) ?? [];
     }
 
     private async loadOtoInverseRelation(
@@ -238,13 +354,25 @@ export class Repository<T> {
         { relation, relatedState }: OtmInfo,
     ): Promise<void> {
         const otoParams: Array<unknown> = [];
-        const otoInClause = relatedState.buildArrayInClause(relatedState.quoteIdentifier(relation.foreignKey), mainIds, otoParams);
+        const otoInClause = relatedState.buildArrayInClause(
+            relatedState.quoteIdentifier(relation.foreignKey),
+            mainIds,
+            otoParams,
+        );
         const sql = `SELECT ${relatedState.selectClause} FROM ${relatedState.quotedTableName} WHERE ${otoInClause}`;
-        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, otoParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(
+            sql,
+            otoParams,
+        );
         const grouped = new Map<unknown, unknown>();
-        for (const relRow of relRows) grouped.set(relRow[relation.foreignKey], relatedState.hydrator(relRow));
+        for (const relRow of relRows)
+            grouped.set(
+                relRow[relation.foreignKey],
+                relatedState.hydrator(relRow),
+            );
         for (let i = 0; i < entities.length; i++)
-            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? null;
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] =
+                grouped.get(rows[i][mainPkDbName]) ?? null;
     }
 
     private async loadMtmRelation(
@@ -254,13 +382,22 @@ export class Repository<T> {
         mainIds: Array<unknown>,
         { relation, relatedState }: MtmInfo,
     ): Promise<void> {
-        const relPk = relatedState.columnMap.get(relatedState.cachedPrimaryColumn!.propertyKey)!;
+        const relPk = relatedState.columnMap.get(
+            relatedState.cachedPrimaryColumn!.propertyKey,
+        )!;
         const qtJoin = this.state.quoteIdentifier(relation.joinTable!);
         const ownerAlias = '_mirror_mtm_fk_';
         const mtmParams: Array<unknown> = [];
-        const mtmInClause = relatedState.buildArrayInClause(`${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)}`, mainIds, mtmParams);
+        const mtmInClause = relatedState.buildArrayInClause(
+            `${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)}`,
+            mainIds,
+            mtmParams,
+        );
         const sql = `SELECT ${relatedState.selectClause}, ${qtJoin}.${this.state.quoteIdentifier(relation.foreignKey)} AS "${ownerAlias}" FROM ${relatedState.quotedTableName} INNER JOIN ${qtJoin} ON ${qtJoin}.${this.state.quoteIdentifier(relation.inverseFk!)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName} WHERE ${mtmInClause}`;
-        const relRows = await this.readRunner.query<Record<string, unknown>>(sql, mtmParams);
+        const relRows = await this.readRunner.query<Record<string, unknown>>(
+            sql,
+            mtmParams,
+        );
         const grouped = new Map<unknown, Array<unknown>>();
         for (const relRow of relRows) {
             const ownerFkVal = relRow[ownerAlias];
@@ -268,21 +405,36 @@ export class Repository<T> {
             grouped.get(ownerFkVal)!.push(relatedState.hydrator(relRow));
         }
         for (let i = 0; i < entities.length; i++)
-            (entities[i] as Record<string, unknown>)[relation.propertyKey] = grouped.get(rows[i][mainPkDbName]) ?? [];
+            (entities[i] as Record<string, unknown>)[relation.propertyKey] =
+                grouped.get(rows[i][mainPkDbName]) ?? [];
     }
 
-    public async findAndCount(options: IFindOptions<T> = {}): Promise<[Array<T>, number]> {
-        const { sql, params } = this.assembler.buildCount(options.where, options.withDeleted);
-        const countPromise = this.readRunner.query<{ count: string }>(sql, params)
-            .then(rows => parseInt(rows[0].count, 10))
-            .catch(error => { throw new QueryError(sql, error, params); });
+    public async findAndCount(
+        options: IFindOptions<T> = {},
+    ): Promise<[Array<T>, number]> {
+        const { sql, params } = this.assembler.buildCount(
+            options.where,
+            options.withDeleted,
+        );
+        const countPromise = this.readRunner
+            .query<{ count: string }>(sql, params)
+            .then((rows) => parseInt(rows[0].count, 10))
+            .catch((error) => {
+                throw new QueryError(sql, error, params);
+            });
         return Promise.all([this.find(options), countPromise]);
     }
 
-    public async findPaginated(options: IPaginationOptions<T>): Promise<IPaginatedResult<T>> {
+    public async findPaginated(
+        options: IPaginationOptions<T>,
+    ): Promise<IPaginatedResult<T>> {
         const { page, limit, ...findOptions } = options;
         const offset = (page - 1) * limit;
-        const [data, total] = await this.findAndCount({ ...findOptions, limit, offset });
+        const [data, total] = await this.findAndCount({
+            ...findOptions,
+            limit,
+            offset,
+        });
         return {
             data,
             meta: {
@@ -298,14 +450,19 @@ export class Repository<T> {
         return new QueryBuilder(this.state, this.activeRunner);
     }
 
-    public async findOne(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T | null> {
+    public async findOne(
+        options: Omit<IFindOptions<T>, 'limit'> = {},
+    ): Promise<T | null> {
         const rows = await this.find({ ...options, limit: 1 });
         return rows.length > 0 ? rows[0] : null;
     }
 
-    public async findOneOrFail(options: Omit<IFindOptions<T>, 'limit'> = {}): Promise<T> {
+    public async findOneOrFail(
+        options: Omit<IFindOptions<T>, 'limit'> = {},
+    ): Promise<T> {
         const entity = await this.findOne(options);
-        if (entity === null) throw new EntityNotFoundError(this.state.metadata.className);
+        if (entity === null)
+            throw new EntityNotFoundError(this.state.metadata.className);
         return entity;
     }
 
@@ -316,7 +473,10 @@ export class Repository<T> {
     public async count(where?: IFindOptions<T>['where']): Promise<number> {
         const { sql, params } = this.assembler.buildCount(where);
         try {
-            const rows = await this.readRunner.query<{ count: string }>(sql, params);
+            const rows = await this.readRunner.query<{ count: string }>(
+                sql,
+                params,
+            );
             return parseInt(rows[0].count, 10);
         } catch (error) {
             throw new QueryError(sql, error, params);
@@ -333,35 +493,56 @@ export class Repository<T> {
         const records: Array<Record<string, unknown>> = [];
         for (const entity of entities) {
             await this.runHooks(entity, this.state.hooks.beforeInsert);
-            const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
+            const record = this.state.flattenEmbeds(
+                entity as Record<string, unknown>,
+            );
             this.applyAutoFkMapping(record);
-            if (!isIdentity && pk.generation &&
-                (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null))
+            if (
+                !isIdentity &&
+                pk.generation &&
+                (record[pk.propertyKey] === undefined ||
+                    record[pk.propertyKey] === null)
+            )
                 record[pk.propertyKey] = this.generatePk(pk.generation);
             if (createdAtCol) record[createdAtCol.propertyKey] = new Date();
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
             records.push(record);
         }
 
-        const { sql, params } = this.assembler.buildBulkInsert(records, isIdentity);
+        const { sql, params } = this.assembler.buildBulkInsert(
+            records,
+            isIdentity,
+        );
         try {
             if (this.state.supportsReturning) {
-                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-                return rows.map(row => this.captureSnapshot(this.state.hydrator(row)));
+                const rows = await this.activeRunner.query<
+                    Record<string, unknown>
+                >(sql, params);
+                return rows.map((row) =>
+                    this.captureSnapshot(this.state.hydrator(row)),
+                );
             }
             if (isIdentity) {
-                return Promise.all(records.map(r => this.insert(r, pk)));
+                return Promise.all(records.map((r) => this.insert(r, pk)));
             }
             await this.activeRunner.query(sql, params);
-            const pkValues = records.map(r => r[pk.propertyKey]);
+            const pkValues = records.map((r) => r[pk.propertyKey]);
             const pkCol = this.state.columnMap.get(pk.propertyKey)!;
             const inParams: Array<unknown> = [];
-            const inClause = this.state.buildArrayInClause(pkCol.quotedDatabaseName, pkValues, inParams);
-            const loaded = await this.activeRunner.query<Record<string, unknown>>(
+            const inClause = this.state.buildArrayInClause(
+                pkCol.quotedDatabaseName,
+                pkValues,
+                inParams,
+            );
+            const loaded = await this.activeRunner.query<
+                Record<string, unknown>
+            >(
                 `SELECT ${this.state.selectClause} FROM ${this.state.quotedTableName} WHERE ${inClause}`,
                 inParams,
             );
-            return loaded.map(row => this.captureSnapshot(this.state.hydrator(row)));
+            return loaded.map((row) =>
+                this.captureSnapshot(this.state.hydrator(row)),
+            );
         } catch (error) {
             throw new QueryError(sql, error, params);
         }
@@ -370,10 +551,15 @@ export class Repository<T> {
     public async removeMany(entities: Array<T>): Promise<void> {
         if (entities.length === 0) return;
         const pk = this.primaryColumn();
-        const ids = entities.map(e => (e as Record<string, unknown>)[pk.propertyKey]);
+        const ids = entities.map(
+            (e) => (e as Record<string, unknown>)[pk.propertyKey],
+        );
 
-        if (ids.some(id => id === undefined || id === null)) {
-            throw new MissingPrimaryKeyError(this.state.metadata.className, 'removeMany');
+        if (ids.some((id) => id === undefined || id === null)) {
+            throw new MissingPrimaryKeyError(
+                this.state.metadata.className,
+                'removeMany',
+            );
         }
 
         const { sql, params } = this.assembler.buildRemoveMany(pk, ids);
@@ -399,13 +585,23 @@ export class Repository<T> {
     }
 
     private isOtmOrOtoInverse(relation: IRelationMetadata): boolean {
-        return relation.type === 'one-to-many' ||
-            (relation.type === 'one-to-one' && !this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey));
+        return (
+            relation.type === 'one-to-many' ||
+            (relation.type === 'one-to-one' &&
+                !this.state.metadata.columns.some(
+                    (c) => c.databaseName === relation.foreignKey,
+                ))
+        );
     }
 
     private isMtoOrOtoOwner(relation: IRelationMetadata): boolean {
-        return relation.type === 'many-to-one' ||
-            (relation.type === 'one-to-one' && this.state.metadata.columns.some(c => c.databaseName === relation.foreignKey));
+        return (
+            relation.type === 'many-to-one' ||
+            (relation.type === 'one-to-one' &&
+                this.state.metadata.columns.some(
+                    (c) => c.databaseName === relation.foreignKey,
+                ))
+        );
     }
 
     private relatedRepo<R>(relatedState: RepositoryState<R>): Repository<R> {
@@ -413,16 +609,29 @@ export class Repository<T> {
     }
 
     private applyAutoFkMapping(record: Record<string, unknown>): void {
-        for (const { relationPropertyKey, fkPropertyKey, relatedPkPropertyKey } of this.state.autoFkMap) {
+        for (const {
+            relationPropertyKey,
+            fkPropertyKey,
+            relatedPkPropertyKey,
+        } of this.state.autoFkMap) {
             const related = record[relationPropertyKey];
             if (!related || typeof related !== 'object') continue;
-            const pkVal = (related as Record<string, unknown>)[relatedPkPropertyKey];
+            const pkVal = (related as Record<string, unknown>)[
+                relatedPkPropertyKey
+            ];
             if (pkVal != null) record[fkPropertyKey] = pkVal;
         }
     }
 
-    private injectFk(child: Record<string, unknown>, relatedState: RepositoryState<unknown>, fkDbName: string, fkValue: unknown): void {
-        const fkColumn = relatedState.metadata.columns.find(c => c.databaseName === fkDbName);
+    private injectFk(
+        child: Record<string, unknown>,
+        relatedState: RepositoryState<unknown>,
+        fkDbName: string,
+        fkValue: unknown,
+    ): void {
+        const fkColumn = relatedState.metadata.columns.find(
+            (c) => c.databaseName === fkDbName,
+        );
         if (fkColumn) child[fkColumn.propertyKey] = fkValue;
     }
 
@@ -430,19 +639,30 @@ export class Repository<T> {
         if (visited.has(entity as object)) return entity;
         visited.add(entity as object);
 
-        const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
+        const record = this.state.flattenEmbeds(
+            entity as Record<string, unknown>,
+        );
 
         for (const relation of this.state.metadata.relations) {
             if (!this.isMtoOrOtoOwner(relation)) continue;
-            if (!this.hasCascade(relation, 'insert') && !this.hasCascade(relation, 'update')) continue;
+            if (
+                !this.hasCascade(relation, 'insert') &&
+                !this.hasCascade(relation, 'update')
+            )
+                continue;
             const related = record[relation.propertyKey];
             if (!related || typeof related !== 'object') continue;
             const relatedState = this.state.getRelatedState(relation);
-            const savedRelated = await this.relatedRepo(relatedState).saveInternal(related as T, visited) as Record<string, unknown>;
+            const savedRelated = (await this.relatedRepo(
+                relatedState,
+            ).saveInternal(related as T, visited)) as Record<string, unknown>;
             const relPk = relatedState.cachedPrimaryColumn;
             if (relPk) {
-                const fkCol = this.state.metadata.columns.find(c => c.databaseName === relation.foreignKey);
-                if (fkCol) record[fkCol.propertyKey] = savedRelated[relPk.propertyKey];
+                const fkCol = this.state.metadata.columns.find(
+                    (c) => c.databaseName === relation.foreignKey,
+                );
+                if (fkCol)
+                    record[fkCol.propertyKey] = savedRelated[relPk.propertyKey];
             }
             record[relation.propertyKey] = savedRelated;
         }
@@ -460,21 +680,50 @@ export class Repository<T> {
             await this.runHooks(entity, this.state.hooks.beforeUpdate);
             if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
 
-            let versionInfo: { column: IColumnMetadata & { quotedDatabaseName: string }; currentVersion: number } | undefined;
+            let versionInfo:
+                | {
+                      column: IColumnMetadata & { quotedDatabaseName: string };
+                      currentVersion: number;
+                  }
+                | undefined;
             if (versionCol) {
                 const currentVersion = record[versionCol.propertyKey];
-                if (typeof currentVersion !== 'number') throw new OptimisticLockError(this.state.metadata.className);
-                versionInfo = { column: this.state.columnMap.get(versionCol.propertyKey)!, currentVersion };
+                if (typeof currentVersion !== 'number')
+                    throw new OptimisticLockError(
+                        this.state.metadata.className,
+                    );
+                versionInfo = {
+                    column: this.state.columnMap.get(versionCol.propertyKey)!,
+                    currentVersion,
+                };
             }
 
             const snapshot = entitySnapshots.get(entity as object);
             if (snapshot) {
                 const dirtyColumns = this.state.metadata.columns.filter(
-                    (c, i) => !c.primary && !c.version && record[c.propertyKey] !== snapshot[i],
+                    (c, i) =>
+                        !c.primary &&
+                        !c.version &&
+                        record[c.propertyKey] !== snapshot[i],
                 );
-                saved = (dirtyColumns.length === 0 && !versionInfo) ? entity : await this.updateById(record, pk, pkValue, dirtyColumns, versionInfo);
+                saved =
+                    dirtyColumns.length === 0 && !versionInfo
+                        ? entity
+                        : await this.updateById(
+                              record,
+                              pk,
+                              pkValue,
+                              dirtyColumns,
+                              versionInfo,
+                          );
             } else {
-                saved = await this.updateById(record, pk, pkValue, undefined, versionInfo);
+                saved = await this.updateById(
+                    record,
+                    pk,
+                    pkValue,
+                    undefined,
+                    versionInfo,
+                );
             }
         } else {
             await this.runHooks(entity, this.state.hooks.beforeInsert);
@@ -487,7 +736,11 @@ export class Repository<T> {
 
         for (const relation of this.state.metadata.relations) {
             if (!this.isOtmOrOtoInverse(relation)) continue;
-            if (!this.hasCascade(relation, 'insert') && !this.hasCascade(relation, 'update')) continue;
+            if (
+                !this.hasCascade(relation, 'insert') &&
+                !this.hasCascade(relation, 'update')
+            )
+                continue;
             const children = record[relation.propertyKey];
             if (!children) continue;
             const relatedState = this.state.getRelatedState(relation);
@@ -495,16 +748,32 @@ export class Repository<T> {
 
             if (relation.type === 'one-to-many') {
                 const childArray = children as Array<Record<string, unknown>>;
-                for (const child of childArray) this.injectFk(child, relatedState, relation.foreignKey, savedPk);
+                for (const child of childArray)
+                    this.injectFk(
+                        child,
+                        relatedState,
+                        relation.foreignKey,
+                        savedPk,
+                    );
                 const relPk = relatedState.cachedPrimaryColumn;
-                const isNew = (c: Record<string, unknown>) => !relPk || c[relPk.propertyKey] === undefined || c[relPk.propertyKey] === null;
+                const isNew = (c: Record<string, unknown>) =>
+                    !relPk ||
+                    c[relPk.propertyKey] === undefined ||
+                    c[relPk.propertyKey] === null;
                 const newOnes = childArray.filter(isNew);
-                const existing = childArray.filter(c => !isNew(c));
-                if (newOnes.length > 0) await relRepo.saveMany(newOnes as Array<T>);
-                for (const child of existing) await relRepo.saveInternal(child as T, visited);
+                const existing = childArray.filter((c) => !isNew(c));
+                if (newOnes.length > 0)
+                    await relRepo.saveMany(newOnes as Array<T>);
+                for (const child of existing)
+                    await relRepo.saveInternal(child as T, visited);
             } else {
                 const child = children as Record<string, unknown>;
-                this.injectFk(child, relatedState, relation.foreignKey, savedPk);
+                this.injectFk(
+                    child,
+                    relatedState,
+                    relation.foreignKey,
+                    savedPk,
+                );
                 await relRepo.saveInternal(child as T, visited);
             }
         }
@@ -512,14 +781,20 @@ export class Repository<T> {
         return saved;
     }
 
-    private async removeInternal(entity: T, visited: Set<object>): Promise<void> {
+    private async removeInternal(
+        entity: T,
+        visited: Set<object>,
+    ): Promise<void> {
         if (visited.has(entity as object)) return;
         visited.add(entity as object);
 
         const pk = this.primaryColumn();
         const pkValue = (entity as Record<string, unknown>)[pk.propertyKey];
         if (typeof pkValue === 'undefined' || pkValue === null) {
-            throw new MissingPrimaryKeyError(this.state.metadata.className, 'remove');
+            throw new MissingPrimaryKeyError(
+                this.state.metadata.className,
+                'remove',
+            );
         }
 
         for (const relation of this.state.metadata.relations) {
@@ -536,8 +811,14 @@ export class Repository<T> {
 
         const deletedAtCol = this.state.cachedDeletedAtColumn;
         if (deletedAtCol) {
-            (entity as Record<string, unknown>)[deletedAtCol.propertyKey] = new Date();
-            await this.updateById(entity as Record<string, unknown>, pk, pkValue, [deletedAtCol]);
+            (entity as Record<string, unknown>)[deletedAtCol.propertyKey] =
+                new Date();
+            await this.updateById(
+                entity as Record<string, unknown>,
+                pk,
+                pkValue,
+                [deletedAtCol],
+            );
         } else {
             const sql = this.assembler.buildRemove(pk);
             try {
@@ -550,10 +831,15 @@ export class Repository<T> {
         for (const relation of this.state.metadata.relations) {
             if (!this.isMtoOrOtoOwner(relation)) continue;
             if (!this.hasCascade(relation, 'remove')) continue;
-            const related = (entity as Record<string, unknown>)[relation.propertyKey];
+            const related = (entity as Record<string, unknown>)[
+                relation.propertyKey
+            ];
             if (!related || typeof related !== 'object') continue;
             const relatedState = this.state.getRelatedState(relation);
-            await this.relatedRepo(relatedState).removeInternal(related as T, visited);
+            await this.relatedRepo(relatedState).removeInternal(
+                related as T,
+                visited,
+            );
         }
     }
 
@@ -561,19 +847,32 @@ export class Repository<T> {
         const pk = this.primaryColumn();
         const record = entity as Record<string, unknown>;
         const pkValue = record[pk.propertyKey];
-        if (!pkValue) throw new MissingPrimaryKeyError(this.state.metadata.className, 'softRestore');
+        if (!pkValue)
+            throw new MissingPrimaryKeyError(
+                this.state.metadata.className,
+                'softRestore',
+            );
         const deletedAtCol = this.state.cachedDeletedAtColumn;
         if (!deletedAtCol) return entity;
         record[deletedAtCol.propertyKey] = null;
         return this.updateById(record, pk, pkValue, [deletedAtCol]);
     }
 
-    public async upsert(entity: T, conflictKeys: Array<keyof T & string>, options?: { update?: Array<keyof T & string> }): Promise<T> {
+    public async upsert(
+        entity: T,
+        conflictKeys: Array<keyof T & string>,
+        options?: { update?: Array<keyof T & string> },
+    ): Promise<T> {
         const pk = this.primaryColumn();
-        const record = this.state.flattenEmbeds(entity as Record<string, unknown>);
+        const record = this.state.flattenEmbeds(
+            entity as Record<string, unknown>,
+        );
 
         if (pk.generation && pk.generation.strategy !== 'identity') {
-            if (record[pk.propertyKey] === undefined || record[pk.propertyKey] === null) {
+            if (
+                record[pk.propertyKey] === undefined ||
+                record[pk.propertyKey] === null
+            ) {
                 record[pk.propertyKey] = this.generatePk(pk.generation);
             }
         }
@@ -582,19 +881,30 @@ export class Repository<T> {
 
         const createdAtCol = this.state.cachedCreatedAtColumn;
         const updatedAtCol = this.state.cachedUpdatedAtColumn;
-        if (createdAtCol && record[createdAtCol.propertyKey] == null) record[createdAtCol.propertyKey] = new Date();
+        if (createdAtCol && record[createdAtCol.propertyKey] == null)
+            record[createdAtCol.propertyKey] = new Date();
         if (updatedAtCol) record[updatedAtCol.propertyKey] = new Date();
 
-        const { sql, params } = this.assembler.buildUpsert(record, conflictKeys, options?.update);
+        const { sql, params } = this.assembler.buildUpsert(
+            record,
+            conflictKeys,
+            options?.update,
+        );
         try {
-            const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+            const rows = await this.activeRunner.query<Record<string, unknown>>(
+                sql,
+                params,
+            );
             return this.captureSnapshot(this.state.hydrator(rows[0]));
         } catch (error) {
             throw new QueryError(sql, error, params);
         }
     }
 
-    public async update(data: Partial<T>, where: IFindOptions<T>['where']): Promise<number> {
+    public async update(
+        data: Partial<T>,
+        where: IFindOptions<T>['where'],
+    ): Promise<number> {
         const { sql, params } = this.assembler.buildUpdate(data, where);
         try {
             const rows = await this.activeRunner.query(sql, params);
@@ -614,22 +924,33 @@ export class Repository<T> {
         }
     }
 
-    private async insert(record: Record<string, unknown>, pk: IColumnMetadata): Promise<T> {
+    private async insert(
+        record: Record<string, unknown>,
+        pk: IColumnMetadata,
+    ): Promise<T> {
         const isIdentity = pk.generation?.strategy === 'identity';
         if (!isIdentity && pk.generation) {
             record[pk.propertyKey] = this.generatePk(pk.generation);
         }
         const { sql, params } = this.assembler.buildInsert(record, isIdentity);
         try {
-            if (this.state.supportsReturning || this.state.supportsOutputInserted) {
-                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
+            if (
+                this.state.supportsReturning ||
+                this.state.supportsOutputInserted
+            ) {
+                const rows = await this.activeRunner.query<
+                    Record<string, unknown>
+                >(sql, params);
                 return this.captureSnapshot(this.state.hydrator(rows[0]));
             }
             await this.activeRunner.query(sql, params);
             let pkValue = record[pk.propertyKey];
             if (isIdentity) {
                 const lidQuery = this.state.lastInsertIdQuery!;
-                const lidRows = await this.activeRunner.query<Record<string, unknown>>(lidQuery);
+                const lidRows =
+                    await this.activeRunner.query<Record<string, unknown>>(
+                        lidQuery,
+                    );
                 pkValue = lidRows[0]['_lid'];
             }
             const entity = await this.findById(pkValue as string | number);
@@ -644,18 +965,42 @@ export class Repository<T> {
         pk: IColumnMetadata & { quotedDatabaseName: string },
         pkValue: unknown,
         dirtyColumns?: Array<IColumnMetadata>,
-        versionInfo?: { column: IColumnMetadata & { quotedDatabaseName: string }; currentVersion: number },
+        versionInfo?: {
+            column: IColumnMetadata & { quotedDatabaseName: string };
+            currentVersion: number;
+        },
     ): Promise<T> {
-        const { sql, params } = this.assembler.buildUpdateById(record, pk, pkValue, dirtyColumns, versionInfo);
+        const { sql, params } = this.assembler.buildUpdateById(
+            record,
+            pk,
+            pkValue,
+            dirtyColumns,
+            versionInfo,
+        );
         try {
-            if (this.state.supportsReturning || this.state.supportsOutputInserted) {
-                const rows = await this.activeRunner.query<Record<string, unknown>>(sql, params);
-                if (versionInfo && rows.length === 0) throw new OptimisticLockError(this.state.metadata.className);
+            if (
+                this.state.supportsReturning ||
+                this.state.supportsOutputInserted
+            ) {
+                const rows = await this.activeRunner.query<
+                    Record<string, unknown>
+                >(sql, params);
+                if (versionInfo && rows.length === 0)
+                    throw new OptimisticLockError(
+                        this.state.metadata.className,
+                    );
                 return this.captureSnapshot(this.state.hydrator(rows[0]));
             }
             await this.activeRunner.query(sql, params);
             const entity = await this.findById(pkValue as string | number);
-            if (versionInfo && (entity === null || (entity as Record<string, unknown>)[versionInfo.column.propertyKey] !== versionInfo.currentVersion + 1)) {
+            if (
+                versionInfo &&
+                (entity === null ||
+                    (entity as Record<string, unknown>)[
+                        versionInfo.column.propertyKey
+                    ] !==
+                        versionInfo.currentVersion + 1)
+            ) {
                 throw new OptimisticLockError(this.state.metadata.className);
             }
             return entity!;
@@ -673,16 +1018,25 @@ export class Repository<T> {
 
     private generatePk(generation: IGenerationOptions): string | number {
         switch (generation.strategy) {
-            case 'uuid_v4': return generateUuidV4();
-            case 'uuid_v7': return generateUuidV7();
-            case 'ulid': return generateUlid();
-            case 'cuid2': return generateCuid2();
+            case 'uuid_v4':
+                return generateUuidV4();
+            case 'uuid_v7':
+                return generateUuidV7();
+            case 'ulid':
+                return generateUlid();
+            case 'cuid2':
+                return generateCuid2();
             case 'custom': {
-                if (!generation.generate) throw new GenerationStrategyError('custom strategy requires a generate() function');
+                if (!generation.generate)
+                    throw new GenerationStrategyError(
+                        'custom strategy requires a generate() function',
+                    );
                 return generation.generate();
             }
             case 'identity':
-                throw new GenerationStrategyError('identity strategy is managed by the database and cannot generate a value');
+                throw new GenerationStrategyError(
+                    'identity strategy is managed by the database and cannot generate a value',
+                );
         }
     }
 }

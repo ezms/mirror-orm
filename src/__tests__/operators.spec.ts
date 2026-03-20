@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { Between, ILike, In, IsNotNull, IsNull, LessThan, LessThanOrEqual, Like, MoreThan, MoreThanOrEqual, Not, Raw } from '../operators';
+import {
+    Between,
+    ILike,
+    In,
+    IsNotNull,
+    IsNull,
+    LessThan,
+    LessThanOrEqual,
+    Like,
+    MoreThan,
+    MoreThanOrEqual,
+    Not,
+    Raw,
+} from '../operators';
 
 describe('Operators', () => {
     describe('Like', () => {
@@ -103,18 +116,24 @@ describe('Operators', () => {
 
     describe('Raw', () => {
         it('passes column name to builder function', () => {
-            const { sql, params } = Raw(col => `${col} > (SELECT AVG("score") FROM "results")`).buildClause('"score"', 1);
+            const { sql, params } = Raw(
+                (col) => `${col} > (SELECT AVG("score") FROM "results")`,
+            ).buildClause('"score"', 1);
             expect(sql).toBe('"score" > (SELECT AVG("score") FROM "results")');
             expect(params).toEqual([]);
         });
 
         it('returns empty params', () => {
-            const { params } = Raw(col => `${col} IS DISTINCT FROM NULL`).buildClause('"value"', 1);
+            const { params } = Raw(
+                (col) => `${col} IS DISTINCT FROM NULL`,
+            ).buildClause('"value"', 1);
             expect(params).toEqual([]);
         });
 
         it('can express arbitrary SQL', () => {
-            const { sql } = Raw(col => `EXTRACT(YEAR FROM ${col}) = 2026`).buildClause('"created_at"', 1);
+            const { sql } = Raw(
+                (col) => `EXTRACT(YEAR FROM ${col}) = 2026`,
+            ).buildClause('"created_at"', 1);
             expect(sql).toBe('EXTRACT(YEAR FROM "created_at") = 2026');
         });
     });

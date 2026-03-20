@@ -56,7 +56,11 @@ export interface IDialect {
      * PostgreSQL: pushes the array as a single param → "col = ANY($N)"
      * Others: pushes each value individually → "col IN (?, ?, ?)"
      */
-    buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string;
+    buildArrayInClause(
+        quotedColumn: string,
+        ids: unknown[],
+        params: unknown[],
+    ): string;
 
     /**
      * Returns the SQL fragment to append for LIMIT/OFFSET pagination.
@@ -65,5 +69,9 @@ export interface IDialect {
      * SQL Server:              "ORDER BY (SELECT NULL) OFFSET m ROWS FETCH NEXT n ROWS ONLY"
      *                          (when hasOrderBy is true, skips the ORDER BY prefix)
      */
-    buildLimitOffset(hasOrderBy: boolean, limit?: number, offset?: number): string;
+    buildLimitOffset(
+        hasOrderBy: boolean,
+        limit?: number,
+        offset?: number,
+    ): string;
 }

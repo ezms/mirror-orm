@@ -26,7 +26,9 @@ class Truck extends Vehicle {
     @Column({ type: 'number' }) payload!: number;
 }
 
-void Vehicle; void Car; void Truck;
+void Vehicle;
+void Car;
+void Truck;
 
 // ─── Testes ──────────────────────────────────────────────────────────────────
 
@@ -52,7 +54,7 @@ describe('@ChildEntity (STI)', () => {
 
         it('filho herda colunas do pai + colunas próprias', () => {
             const meta = registry.getEntity('Car')!;
-            const dbNames = meta.columns.map(c => c.databaseName);
+            const dbNames = meta.columns.map((c) => c.databaseName);
             expect(dbNames).toContain('id');
             expect(dbNames).toContain('kind');
             expect(dbNames).toContain('brand');
@@ -68,24 +70,39 @@ describe('@ChildEntity (STI)', () => {
 
     describe('SELECT — filho', () => {
         it('inclui colunas próprias do filho no SELECT', async () => {
-            const repo = new Repository(Car, runner, registry.getEntity('Car')!);
+            const repo = new Repository(
+                Car,
+                runner,
+                registry.getEntity('Car')!,
+            );
             await repo.find({});
             const [sql] = mockQuery.mock.calls[0];
             expect(sql).toContain('"doors"');
         });
 
         it('auto-adiciona WHERE kind = car no find()', async () => {
-            const repo = new Repository(Car, runner, registry.getEntity('Car')!);
+            const repo = new Repository(
+                Car,
+                runner,
+                registry.getEntity('Car')!,
+            );
             await repo.find({});
             const [sql] = mockQuery.mock.calls[0];
             expect(sql).toMatch(/WHERE.*kind.*=.*'car'/);
         });
 
         it('auto-adiciona WHERE kind = car no findAll()', async () => {
-            const repo = new Repository(Car, runner, registry.getEntity('Car')!);
+            const repo = new Repository(
+                Car,
+                runner,
+                registry.getEntity('Car')!,
+            );
             await repo.findAll();
             const [stmt] = mockQuery.mock.calls[0];
-            const text = typeof stmt === 'string' ? stmt : (stmt as { text: string }).text;
+            const text =
+                typeof stmt === 'string'
+                    ? stmt
+                    : (stmt as { text: string }).text;
             expect(text).toMatch(/WHERE.*kind.*=.*'car'/);
         });
     });
@@ -95,7 +112,11 @@ describe('@ChildEntity (STI)', () => {
             mockQuery.mockResolvedValueOnce([
                 { id: 1, kind: 'car', brand: 'Toyota', doors: 4 },
             ]);
-            const repo = new Repository(Vehicle, runner, registry.getEntity('Vehicle')!);
+            const repo = new Repository(
+                Vehicle,
+                runner,
+                registry.getEntity('Vehicle')!,
+            );
             const [v] = await repo.find({});
             expect(v).toBeInstanceOf(Car);
         });
@@ -104,7 +125,11 @@ describe('@ChildEntity (STI)', () => {
             mockQuery.mockResolvedValueOnce([
                 { id: 2, kind: 'truck', brand: 'Scania', payload: 20000 },
             ]);
-            const repo = new Repository(Vehicle, runner, registry.getEntity('Vehicle')!);
+            const repo = new Repository(
+                Vehicle,
+                runner,
+                registry.getEntity('Vehicle')!,
+            );
             const [v] = await repo.find({});
             expect(v).toBeInstanceOf(Truck);
         });
@@ -113,7 +138,11 @@ describe('@ChildEntity (STI)', () => {
             mockQuery.mockResolvedValueOnce([
                 { id: 3, kind: 'bus', brand: 'Mercedes' },
             ]);
-            const repo = new Repository(Vehicle, runner, registry.getEntity('Vehicle')!);
+            const repo = new Repository(
+                Vehicle,
+                runner,
+                registry.getEntity('Vehicle')!,
+            );
             const [v] = await repo.find({});
             expect(v).toBeInstanceOf(Vehicle);
             expect(v).not.toBeInstanceOf(Car);
@@ -122,8 +151,14 @@ describe('@ChildEntity (STI)', () => {
 
     describe('INSERT — filho', () => {
         it('auto-injeta discriminatorValue no INSERT', async () => {
-            mockQuery.mockResolvedValueOnce([{ id: 1, kind: 'car', brand: 'Honda', doors: 2 }]);
-            const repo = new Repository(Car, runner, registry.getEntity('Car')!);
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, kind: 'car', brand: 'Honda', doors: 2 },
+            ]);
+            const repo = new Repository(
+                Car,
+                runner,
+                registry.getEntity('Car')!,
+            );
 
             const car = Object.assign(new Car(), { brand: 'Honda', doors: 2 });
             await repo.save(car);

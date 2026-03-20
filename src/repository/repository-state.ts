@@ -28,7 +28,10 @@ export class RepositoryState<T> {
     public readonly quotedTableName: string;
     public readonly selectClause: string;
     public readonly qualifiedSelectClause: string;
-    public readonly columnMap: Map<string, IColumnMetadata & { quotedDatabaseName: string }>;
+    public readonly columnMap: Map<
+        string,
+        IColumnMetadata & { quotedDatabaseName: string }
+    >;
     public readonly hydrator: (row: Record<string, unknown>) => T;
     public readonly arrayHydrator: (row: unknown[]) => T;
     public readonly findAllStatement: INamedQuery;
@@ -39,10 +42,20 @@ export class RepositoryState<T> {
     public readonly target: new () => T;
 
     private readonly dialect: IDialect;
-    private readonly relatedStateCache = new Map<string, RepositoryState<unknown>>();
-    private readonly prefixedHydratorCache = new Map<string, (row: Record<string, unknown>) => T>();
+    private readonly relatedStateCache = new Map<
+        string,
+        RepositoryState<unknown>
+    >();
+    private readonly prefixedHydratorCache = new Map<
+        string,
+        (row: Record<string, unknown>) => T
+    >();
 
-    constructor(target: new () => T, metadata: IEntityMetadata, dialect: IDialect = new PostgresDialect()) {
+    constructor(
+        target: new () => T,
+        metadata: IEntityMetadata,
+        dialect: IDialect = new PostgresDialect(),
+    ) {
         this.target = target;
         this.metadata = metadata;
         this.dialect = dialect;
@@ -50,17 +63,29 @@ export class RepositoryState<T> {
         this.columnMap = this.buildColumnMap();
         this.selectClause = this.buildSelectClause();
         this.qualifiedSelectClause = this.buildQualifiedSelectClause();
-        this.cachedPrimaryColumn = this.metadata.columns.find(c => c.primary) ?? null;
-        this.cachedCreatedAtColumn = this.metadata.columns.find(c => c.createdAt) ?? null;
-        this.cachedUpdatedAtColumn = this.metadata.columns.find(c => c.updatedAt) ?? null;
-        this.cachedDeletedAtColumn = this.metadata.columns.find(c => c.deletedAt) ?? null;
-        this.cachedVersionColumn   = this.metadata.columns.find(c => c.version)   ?? null;
-        this.hooks = metadata.hooks ?? { beforeInsert: [], beforeUpdate: [], afterLoad: [] };
+        this.cachedPrimaryColumn =
+            this.metadata.columns.find((c) => c.primary) ?? null;
+        this.cachedCreatedAtColumn =
+            this.metadata.columns.find((c) => c.createdAt) ?? null;
+        this.cachedUpdatedAtColumn =
+            this.metadata.columns.find((c) => c.updatedAt) ?? null;
+        this.cachedDeletedAtColumn =
+            this.metadata.columns.find((c) => c.deletedAt) ?? null;
+        this.cachedVersionColumn =
+            this.metadata.columns.find((c) => c.version) ?? null;
+        this.hooks = metadata.hooks ?? {
+            beforeInsert: [],
+            beforeUpdate: [],
+            afterLoad: [],
+        };
         this.hydrator = this.buildHydrator();
         this.arrayHydrator = this.buildArrayHydrator();
         this.autoFkMap = this.buildAutoFkMap();
         const staticFilters = this.buildStaticWhereFilters();
-        this.findAllStatement = { name: `mirror_${metadata.className}_fa`, text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${staticFilters}` };
+        this.findAllStatement = {
+            name: `mirror_${metadata.className}_fa`,
+            text: `SELECT ${this.selectClause} FROM ${this.quotedTableName}${staticFilters}`,
+        };
         this.findByIdStatement = this.buildFindByIdStatement();
     }
 
@@ -88,86 +113,134 @@ export class RepositoryState<T> {
         return this.dialect.supportsJsonOperators ?? false;
     }
 
-    public buildArrayInClause(quotedColumn: string, ids: unknown[], params: unknown[]): string {
+    public buildArrayInClause(
+        quotedColumn: string,
+        ids: unknown[],
+        params: unknown[],
+    ): string {
         return this.dialect.buildArrayInClause(quotedColumn, ids, params);
     }
 
-    public buildLimitOffset(hasOrderBy: boolean, limit?: number, offset?: number): string {
+    public buildLimitOffset(
+        hasOrderBy: boolean,
+        limit?: number,
+        offset?: number,
+    ): string {
         return this.dialect.buildLimitOffset(hasOrderBy, limit, offset);
     }
 
-    private buildColumnMap(): Map<string, IColumnMetadata & { quotedDatabaseName: string }> {
+    private buildColumnMap(): Map<
+        string,
+        IColumnMetadata & { quotedDatabaseName: string }
+    > {
         return new Map(
-            this.metadata.columns.map(c => [
+            this.metadata.columns.map((c) => [
                 c.propertyKey,
-                { ...c, quotedDatabaseName: this.quoteIdentifier(c.databaseName) },
+                {
+                    ...c,
+                    quotedDatabaseName: this.quoteIdentifier(c.databaseName),
+                },
             ]),
         );
     }
 
     private buildSelectClause(): string {
         return [...this.columnMap.values()]
-            .filter(c => c.options.select !== false)
-            .map(c => c.quotedDatabaseName)
+            .filter((c) => c.options.select !== false)
+            .map((c) => c.quotedDatabaseName)
             .join(', ');
     }
 
     private buildQualifiedSelectClause(): string {
         return [...this.columnMap.values()]
-            .filter(c => c.options.select !== false)
-            .map(c => `${this.quotedTableName}.${c.quotedDatabaseName}`)
+            .filter((c) => c.options.select !== false)
+            .map((c) => `${this.quotedTableName}.${c.quotedDatabaseName}`)
             .join(', ');
     }
 
-    public getRelatedState(relation: IRelationMetadata): RepositoryState<unknown> {
+    public getRelatedState(
+        relation: IRelationMetadata,
+    ): RepositoryState<unknown> {
         const cached = this.relatedStateCache.get(relation.propertyKey);
         if (cached) return cached;
         const targetCtor = relation.target() as new () => unknown;
         const meta = registry.getEntity(targetCtor.name);
-        if (!meta) throw new Error(`Related entity "${targetCtor.name}" not registered. Did you add @Entity?`);
+        if (!meta)
+            throw new Error(
+                `Related entity "${targetCtor.name}" not registered. Did you add @Entity?`,
+            );
         const state = new RepositoryState(targetCtor, meta);
         this.relatedStateCache.set(relation.propertyKey, state);
         return state;
     }
 
-    public getOrBuildPrefixedHydrator(prefix: string): (row: Record<string, unknown>) => T {
+    public getOrBuildPrefixedHydrator(
+        prefix: string,
+    ): (row: Record<string, unknown>) => T {
         const cached = this.prefixedHydratorCache.get(prefix);
         if (cached) return cached;
         const assignments = this.metadata.columns
-            .map(c => {
+            .map((c) => {
                 const db = `${prefix}${c.databaseName}`;
                 const prop = c.propertyKey;
                 const rhs = this.buildCastExpression(db, c.options.type);
                 return `if(r["${db}"]!==undefined&&r["${db}"]!==null)i["${prop}"]=${rhs};`;
             })
             .join('');
-        const fn = new Function('C', 'H', `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`);
-        const hydrator = fn(this.target, HYDRATOR_HELPERS) as (row: Record<string, unknown>) => T;
+        const fn = new Function(
+            'C',
+            'H',
+            `return function hydrate(r){var i=Object.create(C.prototype);${assignments}return i;}`,
+        );
+        const hydrator = fn(this.target, HYDRATOR_HELPERS) as (
+            row: Record<string, unknown>,
+        ) => T;
         this.prefixedHydratorCache.set(prefix, hydrator);
         return hydrator;
     }
 
     private buildAutoFkMap(): Array<AutoFkEntry> {
-        return this.metadata.relations.flatMap(r => {
-            const isOwner = r.type === 'many-to-one' ||
-                (r.type === 'one-to-one' && this.metadata.columns.some(c => c.databaseName === r.foreignKey));
+        return this.metadata.relations.flatMap((r) => {
+            const isOwner =
+                r.type === 'many-to-one' ||
+                (r.type === 'one-to-one' &&
+                    this.metadata.columns.some(
+                        (c) => c.databaseName === r.foreignKey,
+                    ));
             if (!isOwner) return [];
-            const fkCol = this.metadata.columns.find(c => c.databaseName === r.foreignKey);
+            const fkCol = this.metadata.columns.find(
+                (c) => c.databaseName === r.foreignKey,
+            );
             if (!fkCol) return [];
-            const relatedMeta = registry.getEntity((r.target() as new () => unknown).name);
+            const relatedMeta = registry.getEntity(
+                (r.target() as new () => unknown).name,
+            );
             if (!relatedMeta) return [];
-            const relatedPk = relatedMeta.columns.find(c => c.primary);
+            const relatedPk = relatedMeta.columns.find((c) => c.primary);
             if (!relatedPk) return [];
-            return [{ relationPropertyKey: r.propertyKey, fkPropertyKey: fkCol.propertyKey, relatedPkPropertyKey: relatedPk.propertyKey }];
+            return [
+                {
+                    relationPropertyKey: r.propertyKey,
+                    fkPropertyKey: fkCol.propertyKey,
+                    relatedPkPropertyKey: relatedPk.propertyKey,
+                },
+            ];
         });
     }
 
     private buildStaticWhereFilters(): string {
         const clauses: Array<string> = [];
-        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn)
-            clauses.push(`${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`);
+        if (
+            this.metadata.discriminatorValue &&
+            this.metadata.discriminatorColumn
+        )
+            clauses.push(
+                `${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`,
+            );
         if (this.cachedDeletedAtColumn)
-            clauses.push(`${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`);
+            clauses.push(
+                `${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`,
+            );
         return clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : '';
     }
 
@@ -175,10 +248,17 @@ export class RepositoryState<T> {
         if (!this.cachedPrimaryColumn) return null;
         const pk = this.columnMap.get(this.cachedPrimaryColumn.propertyKey)!;
         const clauses: Array<string> = [];
-        if (this.metadata.discriminatorValue && this.metadata.discriminatorColumn)
-            clauses.push(`${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`);
+        if (
+            this.metadata.discriminatorValue &&
+            this.metadata.discriminatorColumn
+        )
+            clauses.push(
+                `${this.quoteIdentifier(this.metadata.discriminatorColumn)} = '${this.metadata.discriminatorValue}'`,
+            );
         if (this.cachedDeletedAtColumn)
-            clauses.push(`${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`);
+            clauses.push(
+                `${this.quoteIdentifier(this.cachedDeletedAtColumn.databaseName)} IS NULL`,
+            );
         clauses.push(`${pk.quotedDatabaseName} = ${this.placeholder(1)}`);
         return {
             name: `mirror_${this.metadata.className}_fbi`,
@@ -186,21 +266,30 @@ export class RepositoryState<T> {
         };
     }
 
-    public flattenEmbeds(record: Record<string, unknown>): Record<string, unknown> {
+    public flattenEmbeds(
+        record: Record<string, unknown>,
+    ): Record<string, unknown> {
         if (!this.metadata.embeds?.length) return record;
         const flat = { ...record };
         for (const col of this.metadata.columns) {
             if (!col.embedOwnerKey) continue;
-            const owner = record[col.embedOwnerKey] as Record<string, unknown> | null | undefined;
+            const owner = record[col.embedOwnerKey] as
+                | Record<string, unknown>
+                | null
+                | undefined;
             flat[col.propertyKey] = owner?.[col.embedSourceKey!];
         }
         return flat;
     }
 
-    private collectEmbedGroups(): { groups: Map<string, Array<IColumnMetadata>>; targets: Record<string, new () => unknown> } {
+    private collectEmbedGroups(): {
+        groups: Map<string, Array<IColumnMetadata>>;
+        targets: Record<string, new () => unknown>;
+    } {
         const targets: Record<string, new () => unknown> = {};
         const groups = new Map<string, Array<IColumnMetadata>>();
-        for (const embed of this.metadata.embeds ?? []) targets[embed.propertyKey] = embed.target();
+        for (const embed of this.metadata.embeds ?? [])
+            targets[embed.propertyKey] = embed.target();
         for (const c of this.metadata.columns) {
             if (!c.embedOwnerKey) continue;
             if (!groups.has(c.embedOwnerKey)) groups.set(c.embedOwnerKey, []);
@@ -209,13 +298,18 @@ export class RepositoryState<T> {
         return { groups, targets };
     }
 
-    private buildEmbedHydratorCode(groups: Map<string, Array<IColumnMetadata>>): string {
+    private buildEmbedHydratorCode(
+        groups: Map<string, Array<IColumnMetadata>>,
+    ): string {
         let code = '';
         for (const [ownerKey, cols] of groups) {
             const v = `_e_${ownerKey}`;
             code += `var ${v}=Object.create(E["${ownerKey}"].prototype);`;
             for (const c of cols) {
-                const rhs = this.buildCastExpression(c.databaseName, c.options.type);
+                const rhs = this.buildCastExpression(
+                    c.databaseName,
+                    c.options.type,
+                );
                 code += `if(r["${c.databaseName}"]!==undefined)${v}["${c.embedSourceKey}"]=${rhs};`;
             }
             code += `i["${ownerKey}"]=${v};`;
@@ -225,43 +319,69 @@ export class RepositoryState<T> {
 
     private buildArrayHydrator(): (row: unknown[]) => T {
         const { groups, targets } = this.collectEmbedGroups();
-        const setup    = [...groups.keys()].map(k => `var _e_${k}=Object.create(E["${k}"].prototype);`);
-        const teardown = [...groups.keys()].map(k => `i["${k}"]=_e_${k};`);
+        const setup = [...groups.keys()].map(
+            (k) => `var _e_${k}=Object.create(E["${k}"].prototype);`,
+        );
+        const teardown = [...groups.keys()].map((k) => `i["${k}"]=_e_${k};`);
         const assignments: Array<string> = [];
 
         let idx = 0;
         for (const c of this.metadata.columns) {
             if (c.options.select === false) continue;
             const i = idx++;
-            const rhs    = this.buildArrayCastExpression(i, c.options.type);
-            const target = c.embedOwnerKey ? `_e_${c.embedOwnerKey}["${c.embedSourceKey}"]` : `i["${c.propertyKey}"]`;
-            assignments.push(`if(r[${i}]!==undefined&&r[${i}]!==null)${target}=${rhs};`);
+            const rhs = this.buildArrayCastExpression(i, c.options.type);
+            const target = c.embedOwnerKey
+                ? `_e_${c.embedOwnerKey}["${c.embedSourceKey}"]`
+                : `i["${c.propertyKey}"]`;
+            assignments.push(
+                `if(r[${i}]!==undefined&&r[${i}]!==null)${target}=${rhs};`,
+            );
         }
 
         const body = [...setup, ...assignments, ...teardown].join('');
-        const fn = new Function('C', 'H', 'E', `return function hydrateArray(r){var i=Object.create(C.prototype);${body}return i;}`);
-        return fn(this.target, HYDRATOR_HELPERS, targets) as (row: unknown[]) => T;
+        const fn = new Function(
+            'C',
+            'H',
+            'E',
+            `return function hydrateArray(r){var i=Object.create(C.prototype);${body}return i;}`,
+        );
+        return fn(this.target, HYDRATOR_HELPERS, targets) as (
+            row: unknown[],
+        ) => T;
     }
 
-    private buildArrayCastExpression(idx: number, type: import('../interfaces/column-options').ColumnType | undefined): string {
+    private buildArrayCastExpression(
+        idx: number,
+        type: import('../interfaces/column-options').ColumnType | undefined,
+    ): string {
         const v = `r[${idx}]`;
         switch (type) {
-            case 'number':   return `${v}!==null?+${v}:null`;
-            case 'bigint':   return `${v}!==null?BigInt(${v}):null`;
-            case 'boolean':  return `${v}!==null?Boolean(${v}):null`;
-            case 'datetime': return `${v}!==null?new Date(${v}):null`;
-            case 'date':     return `${v}!==null?H.dateOnly(${v}):null`;
-            case 'iso':      return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
-            default:         return v;
+            case 'number':
+                return `${v}!==null?+${v}:null`;
+            case 'bigint':
+                return `${v}!==null?BigInt(${v}):null`;
+            case 'boolean':
+                return `${v}!==null?Boolean(${v}):null`;
+            case 'datetime':
+                return `${v}!==null?new Date(${v}):null`;
+            case 'date':
+                return `${v}!==null?H.dateOnly(${v}):null`;
+            case 'iso':
+                return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            default:
+                return v;
         }
     }
 
     private buildHydrator(): (row: Record<string, unknown>) => T {
         const { groups, targets } = this.collectEmbedGroups();
         const regularCode = this.metadata.columns
-            .filter(c => !c.embedOwnerKey)
-            .map(c => {
-                const rhs = this.buildCastExpression(c.databaseName, c.options.type);
+            .filter((c) => !c.embedOwnerKey)
+            .map((c) => {
+                const rhs = this.buildCastExpression(
+                    c.databaseName,
+                    c.options.type,
+                );
                 return `if(r["${c.databaseName}"]!==undefined)i["${c.propertyKey}"]=${rhs};`;
             })
             .join('');
@@ -269,25 +389,52 @@ export class RepositoryState<T> {
 
         if (this.metadata.stiChildren && this.metadata.discriminatorColumn) {
             const discCol = this.metadata.discriminatorColumn;
-            const fn = new Function('C', 'H', 'E', 'S',
-                `return function hydrate(r){var ctor=S.get(r["${discCol}"])||C;var i=Object.create(ctor.prototype);${regularCode}${embedCode}return i;}`);
-            return fn(this.target, HYDRATOR_HELPERS, targets, this.metadata.stiChildren) as (row: Record<string, unknown>) => T;
+            const fn = new Function(
+                'C',
+                'H',
+                'E',
+                'S',
+                `return function hydrate(r){var ctor=S.get(r["${discCol}"])||C;var i=Object.create(ctor.prototype);${regularCode}${embedCode}return i;}`,
+            );
+            return fn(
+                this.target,
+                HYDRATOR_HELPERS,
+                targets,
+                this.metadata.stiChildren,
+            ) as (row: Record<string, unknown>) => T;
         }
 
-        const fn = new Function('C', 'H', 'E', `return function hydrate(r){var i=Object.create(C.prototype);${regularCode}${embedCode}return i;}`);
-        return fn(this.target, HYDRATOR_HELPERS, targets) as (row: Record<string, unknown>) => T;
+        const fn = new Function(
+            'C',
+            'H',
+            'E',
+            `return function hydrate(r){var i=Object.create(C.prototype);${regularCode}${embedCode}return i;}`,
+        );
+        return fn(this.target, HYDRATOR_HELPERS, targets) as (
+            row: Record<string, unknown>,
+        ) => T;
     }
 
-    private buildCastExpression(db: string, type: import('../interfaces/column-options').ColumnType | undefined): string {
+    private buildCastExpression(
+        db: string,
+        type: import('../interfaces/column-options').ColumnType | undefined,
+    ): string {
         const v = `r["${db}"]`;
         switch (type) {
-            case 'number':   return `${v}!==null?+${v}:null`;
-            case 'bigint':   return `${v}!==null?BigInt(${v}):null`;
-            case 'boolean':  return `${v}!==null?Boolean(${v}):null`;
-            case 'datetime': return `${v}!==null?new Date(${v}):null`;
-            case 'date':     return `${v}!==null?H.dateOnly(${v}):null`;
-            case 'iso':      return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
-            default:         return v;
+            case 'number':
+                return `${v}!==null?+${v}:null`;
+            case 'bigint':
+                return `${v}!==null?BigInt(${v}):null`;
+            case 'boolean':
+                return `${v}!==null?Boolean(${v}):null`;
+            case 'datetime':
+                return `${v}!==null?new Date(${v}):null`;
+            case 'date':
+                return `${v}!==null?H.dateOnly(${v}):null`;
+            case 'iso':
+                return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            default:
+                return v;
         }
     }
 }

@@ -34,15 +34,30 @@ export class QueryBuilder<T> {
     }
 
     leftJoin(relationKey: string, alias: string): this {
-        const relation = this.state.metadata.relations.find(r => r.propertyKey === relationKey);
-        if (!relation) throw new Error(`Relation "${relationKey}" not found on ${this.state.metadata.className}`);
+        const relation = this.state.metadata.relations.find(
+            (r) => r.propertyKey === relationKey,
+        );
+        if (!relation)
+            throw new Error(
+                `Relation "${relationKey}" not found on ${this.state.metadata.className}`,
+            );
         const relatedState = this.state.getRelatedState(relation);
         const relPk = relatedState.cachedPrimaryColumn;
-        if (!relPk) throw new Error(`Related entity "${relatedState.metadata.className}" has no primary column`);
+        if (!relPk)
+            throw new Error(
+                `Related entity "${relatedState.metadata.className}" has no primary column`,
+            );
         const quotedAlias = `"${alias}"`;
-        const relPkQuoted = relatedState.columnMap.get(relPk.propertyKey)!.quotedDatabaseName;
+        const relPkQuoted = relatedState.columnMap.get(
+            relPk.propertyKey,
+        )!.quotedDatabaseName;
         const condition = `${this.state.quotedTableName}."${relation.foreignKey}" = ${quotedAlias}.${relPkQuoted}`;
-        this._joins.push({ type: 'LEFT', quotedTable: relatedState.quotedTableName, alias: quotedAlias, condition });
+        this._joins.push({
+            type: 'LEFT',
+            quotedTable: relatedState.quotedTableName,
+            alias: quotedAlias,
+            condition,
+        });
         return this;
     }
 
@@ -83,8 +98,11 @@ export class QueryBuilder<T> {
 
     async getMany(): Promise<T[]> {
         const { sql, params } = this.build();
-        const rows = await this.runner.query<Record<string, unknown>>(sql, params);
-        return rows.map(row => this.state.hydrator(row));
+        const rows = await this.runner.query<Record<string, unknown>>(
+            sql,
+            params,
+        );
+        return rows.map((row) => this.state.hydrator(row));
     }
 
     async getRaw(): Promise<Record<string, unknown>[]> {
@@ -102,24 +120,32 @@ export class QueryBuilder<T> {
             whereSql += whereSql ? ` AND ${sdClause}` : ` WHERE ${sdClause}`;
         }
         const from = `${this.state.quotedTableName}${joinsSql ? ` ${joinsSql}` : ''}`;
-        const rows = await this.runner.query<{ count: string }>(`SELECT COUNT(*) FROM ${from}${whereSql}`, params);
+        const rows = await this.runner.query<{ count: string }>(
+            `SELECT COUNT(*) FROM ${from}${whereSql}`,
+            params,
+        );
         return parseInt(rows[0].count, 10);
     }
 
     async explain(): Promise<string> {
         const { sql, params } = this.build();
-        const rows = await this.runner.query<{ 'QUERY PLAN': string }>(`EXPLAIN ANALYZE ${sql}`, params);
-        return rows.map(r => r['QUERY PLAN']).join('\n');
+        const rows = await this.runner.query<{ 'QUERY PLAN': string }>(
+            `EXPLAIN ANALYZE ${sql}`,
+            params,
+        );
+        return rows.map((r) => r['QUERY PLAN']).join('\n');
     }
 
     build(): { sql: string; params: unknown[] } {
         const params: unknown[] = [];
 
         const selectClause = this._selectKeys
-            ? this._selectKeys.map(key => {
-                const col = this.state.columnMap.get(key);
-                return col ? col.quotedDatabaseName : key;
-            }).join(', ')
+            ? this._selectKeys
+                  .map((key) => {
+                      const col = this.state.columnMap.get(key);
+                      return col ? col.quotedDatabaseName : key;
+                  })
+                  .join(', ')
             : this.state.selectClause;
 
         const joinsSql = this.buildJoins();
@@ -134,15 +160,21 @@ export class QueryBuilder<T> {
         }
         sql += whereSql;
 
-        if (this._groupBy.length > 0) sql += ` GROUP BY ${this._groupBy.join(', ')}`;
+        if (this._groupBy.length > 0)
+            sql += ` GROUP BY ${this._groupBy.join(', ')}`;
         if (this._having) sql += ` HAVING ${this._having}`;
 
         if (this._orderBy) {
-            const orderClauses = Object.entries(this._orderBy).map(([key, dir]) => {
-                const col = this.state.columnMap.get(key);
-                return col ? `${col.quotedDatabaseName} ${dir}` : `${key} ${dir}`;
-            });
-            if (orderClauses.length > 0) sql += ` ORDER BY ${orderClauses.join(', ')}`;
+            const orderClauses = Object.entries(this._orderBy).map(
+                ([key, dir]) => {
+                    const col = this.state.columnMap.get(key);
+                    return col
+                        ? `${col.quotedDatabaseName} ${dir}`
+                        : `${key} ${dir}`;
+                },
+            );
+            if (orderClauses.length > 0)
+                sql += ` ORDER BY ${orderClauses.join(', ')}`;
         }
 
         if (this._limit !== null) sql += ` LIMIT ${this._limit}`;
@@ -152,24 +184,33 @@ export class QueryBuilder<T> {
     }
 
     private buildJoins(): string {
-        return this._joins.map(j => `${j.type} JOIN ${j.quotedTable} ${j.alias} ON ${j.condition}`).join(' ');
+        return this._joins
+            .map(
+                (j) =>
+                    `${j.type} JOIN ${j.quotedTable} ${j.alias} ON ${j.condition}`,
+            )
+            .join(' ');
     }
 
     private buildWhere(params: unknown[]): string {
         const parts: string[] = [];
 
         if (this._where) {
-            const groups = Array.isArray(this._where) ? this._where : [this._where];
+            const groups = Array.isArray(this._where)
+                ? this._where
+                : [this._where];
             const groupClauses = groups
-                .map(condition => this.buildWhereGroup(condition, params))
-                .filter(g => g.length > 0)
-                .map(g => g.length > 1 ? `(${g.join(' AND ')})` : g[0]);
+                .map((condition) => this.buildWhereGroup(condition, params))
+                .filter((g) => g.length > 0)
+                .map((g) => (g.length > 1 ? `(${g.join(' AND ')})` : g[0]));
             if (groupClauses.length > 0) parts.push(groupClauses.join(' OR '));
         }
 
         for (const raw of this._rawWheres) {
             const offset = params.length;
-            const remapped = raw.sql.replace(/\$(\d+)/g, (_, n) => this.state.placeholder(parseInt(n, 10) + offset));
+            const remapped = raw.sql.replace(/\$(\d+)/g, (_, n) =>
+                this.state.placeholder(parseInt(n, 10) + offset),
+            );
             params.push(...raw.params);
             parts.push(remapped);
         }
@@ -177,7 +218,10 @@ export class QueryBuilder<T> {
         return parts.length > 0 ? ` WHERE ${parts.join(' AND ')}` : '';
     }
 
-    private buildWhereGroup(condition: Record<string, unknown>, params: unknown[]): string[] {
+    private buildWhereGroup(
+        condition: Record<string, unknown>,
+        params: unknown[],
+    ): string[] {
         const clauses: string[] = [];
         for (const [key, value] of Object.entries(condition)) {
             let quotedCol: string;
@@ -190,12 +234,18 @@ export class QueryBuilder<T> {
                 quotedCol = col.quotedDatabaseName;
             }
             if (isOperator(value)) {
-                const { sql, params: opParams } = value.buildClause(quotedCol, params.length + 1, this.state.placeholder.bind(this.state));
+                const { sql, params: opParams } = value.buildClause(
+                    quotedCol,
+                    params.length + 1,
+                    this.state.placeholder.bind(this.state),
+                );
                 clauses.push(sql);
                 params.push(...opParams);
             } else {
                 params.push(value);
-                clauses.push(`${quotedCol} = ${this.state.placeholder(params.length)}`);
+                clauses.push(
+                    `${quotedCol} = ${this.state.placeholder(params.length)}`,
+                );
             }
         }
         return clauses;

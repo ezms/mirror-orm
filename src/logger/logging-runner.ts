@@ -13,7 +13,8 @@ export class LoggingQueryRunner implements IQueryRunner {
         if (runner.queryArray) {
             this.queryArray = (input, params) => {
                 const sql = typeof input === 'string' ? input : input.text;
-                const values = typeof input === 'string' ? params : input.values;
+                const values =
+                    typeof input === 'string' ? params : input.values;
                 this.logger.query(sql, values);
                 return runner.queryArray!(input, params);
             };
@@ -26,7 +27,10 @@ export class LoggingQueryRunner implements IQueryRunner {
         }
     }
 
-    public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+    public async query<T = unknown>(
+        input: string | INamedQuery,
+        params?: Array<unknown>,
+    ): Promise<Array<T>> {
         const sql = typeof input === 'string' ? input : input.text;
         const values = typeof input === 'string' ? params : input.values;
         this.logger.query(sql, values);
@@ -34,7 +38,10 @@ export class LoggingQueryRunner implements IQueryRunner {
     }
 }
 
-export class LoggingTransactionRunner extends LoggingQueryRunner implements ITransactionRunner {
+export class LoggingTransactionRunner
+    extends LoggingQueryRunner
+    implements ITransactionRunner
+{
     constructor(
         protected readonly runner: ITransactionRunner,
         protected readonly logger: ILogger,

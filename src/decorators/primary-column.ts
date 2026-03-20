@@ -2,7 +2,10 @@ import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IPrimaryColumnOptions } from '../interfaces/primary-column-options';
 import { COLUMNS_KEY } from '../metadata/symbols';
 
-type PrimaryColumnDecorator = (_value: undefined, context: ClassFieldDecoratorContext) => void;
+type PrimaryColumnDecorator = (
+    _value: undefined,
+    context: ClassFieldDecoratorContext,
+) => void;
 
 type PrimaryColumnFactory = {
     (_value: undefined, context: ClassFieldDecoratorContext): void;
@@ -10,7 +13,10 @@ type PrimaryColumnFactory = {
     (): PrimaryColumnDecorator;
 };
 
-const applyPrimaryColumn = (options: IPrimaryColumnOptions | undefined, context: ClassFieldDecoratorContext): void => {
+const applyPrimaryColumn = (
+    options: IPrimaryColumnOptions | undefined,
+    context: ClassFieldDecoratorContext,
+): void => {
     const columnName = options?.name ?? String(context.name);
 
     const column: IColumnMetadata = {
@@ -26,7 +32,8 @@ const applyPrimaryColumn = (options: IPrimaryColumnOptions | undefined, context:
     /* v8 ignore next */
     if (!context.metadata) return;
     /* v8 ignore next */
-    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
+    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??=
+        [];
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };
 

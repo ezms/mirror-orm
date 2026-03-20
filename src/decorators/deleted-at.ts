@@ -1,17 +1,21 @@
 import { IColumnMetadata } from '../interfaces/column-metadata';
 import { COLUMNS_KEY } from '../metadata/symbols';
 
-export const DeletedAt = (dbName = 'deleted_at') => (_value: undefined, context: ClassFieldDecoratorContext): void => {
-    const column: IColumnMetadata = {
-        propertyKey: String(context.name),
-        databaseName: dbName,
-        options: { type: 'datetime' },
-        primary: false,
-        deletedAt: true,
+export const DeletedAt =
+    (dbName = 'deleted_at') =>
+    (_value: undefined, context: ClassFieldDecoratorContext): void => {
+        const column: IColumnMetadata = {
+            propertyKey: String(context.name),
+            databaseName: dbName,
+            options: { type: 'datetime' },
+            primary: false,
+            deletedAt: true,
+        };
+        /* v8 ignore next */
+        if (!context.metadata) return;
+        /* v8 ignore next */
+        (context.metadata[COLUMNS_KEY] as
+            | Array<IColumnMetadata>
+            | undefined) ??= [];
+        (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
     };
-    /* v8 ignore next */
-    if (!context.metadata) return;
-    /* v8 ignore next */
-    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
-    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
-};

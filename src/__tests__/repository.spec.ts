@@ -1,5 +1,18 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { EntityNotFoundError, MissingPrimaryKeyError, NoPrimaryColumnError, QueryError } from '../errors';
+import {
+    afterEach,
+    beforeEach,
+    describe,
+    expect,
+    it,
+    vi,
+    type Mock,
+} from 'vitest';
+import {
+    EntityNotFoundError,
+    MissingPrimaryKeyError,
+    NoPrimaryColumnError,
+    QueryError,
+} from '../errors';
 import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
@@ -7,7 +20,13 @@ import { Like } from '../operators';
 import { Repository, RepositoryState } from '../repository/repository';
 import { entitySnapshots } from '../context/entity-snapshots';
 import { transactionStore } from '../context/transaction-store';
-import { AccountFixture, AuthorFixture, BookFixture, PostFixture, UserFixture } from './fixtures/user.entity';
+import {
+    AccountFixture,
+    AuthorFixture,
+    BookFixture,
+    PostFixture,
+    UserFixture,
+} from './fixtures/user.entity';
 
 // force decorator registration
 void UserFixture;
@@ -33,11 +52,16 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
     describe('findAll', () => {
         it('executes SELECT with explicit columns and hydrates results', async () => {
-            mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: 'e@test.com' }]);
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, name: 'Emanuel', email: 'e@test.com' },
+            ]);
 
             const result = await repo.findAll();
 
-            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_UserFixture_fa', text: 'SELECT "id", "name", "email" FROM "users"' });
+            expect(mockQuery).toHaveBeenCalledWith({
+                name: 'mirror_UserFixture_fa',
+                text: 'SELECT "id", "name", "email" FROM "users"',
+            });
             expect(result).toHaveLength(1);
             expect(result[0]).toBeInstanceOf(UserFixture);
             expect(result[0].id).toBe(1);
@@ -59,11 +83,17 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
     describe('findById', () => {
         it('queries by primary key and hydrates the result', async () => {
-            mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: null }]);
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, name: 'Emanuel', email: null },
+            ]);
 
             const result = await repo.findById(1);
 
-            expect(mockQuery).toHaveBeenCalledWith({ name: 'mirror_UserFixture_fbi', text: 'SELECT "id", "name", "email" FROM "users" WHERE "id" = $1', values: [1] });
+            expect(mockQuery).toHaveBeenCalledWith({
+                name: 'mirror_UserFixture_fbi',
+                text: 'SELECT "id", "name", "email" FROM "users" WHERE "id" = $1',
+                values: [1],
+            });
             expect(result).toBeInstanceOf(UserFixture);
             expect(result!.id).toBe(1);
         });
@@ -85,7 +115,10 @@ describe('Repository<UserFixture> (identity PK)', () => {
         it('executes SELECT with explicit columns and no WHERE when called with empty options', async () => {
             mockQuery.mockResolvedValueOnce([]);
             await repo.find();
-            expect(mockQuery).toHaveBeenCalledWith('SELECT "id", "name", "email" FROM "users"', []);
+            expect(mockQuery).toHaveBeenCalledWith(
+                'SELECT "id", "name", "email" FROM "users"',
+                [],
+            );
         });
 
         it('builds WHERE clause for simple equality', async () => {
@@ -108,7 +141,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
         it('joins multiple where conditions with AND', async () => {
             mockQuery.mockResolvedValueOnce([]);
-            await repo.find({ where: { name: 'Emanuel', email: 'e@test.com' } });
+            await repo.find({
+                where: { name: 'Emanuel', email: 'e@test.com' },
+            });
             const [sql, params] = mockQuery.mock.calls[0];
             expect(sql).toContain('AND');
             expect(params).toContain('Emanuel');
@@ -126,9 +161,13 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
         it('wraps multi-condition groups in parentheses for OR', async () => {
             mockQuery.mockResolvedValueOnce([]);
-            await repo.find({ where: [{ name: 'A', email: 'a@test.com' }, { name: 'B' }] });
+            await repo.find({
+                where: [{ name: 'A', email: 'a@test.com' }, { name: 'B' }],
+            });
             const [sql] = mockQuery.mock.calls[0];
-            expect(sql).toContain('("name" = $1 AND "email" = $2) OR "name" = $3');
+            expect(sql).toContain(
+                '("name" = $1 AND "email" = $2) OR "name" = $3',
+            );
         });
 
         it('appends ORDER BY clause', async () => {
@@ -155,7 +194,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
         it('wraps database errors in QueryError', async () => {
             mockQuery.mockRejectedValueOnce(new Error('syntax error'));
-            await expect(repo.find({ where: { name: 'x' } })).rejects.toThrow(QueryError);
+            await expect(repo.find({ where: { name: 'x' } })).rejects.toThrow(
+                QueryError,
+            );
         });
     });
 
@@ -167,13 +208,16 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             const result = await repo.count();
 
-            expect(mockQuery).toHaveBeenCalledWith('SELECT COUNT(*) FROM "users"', []);
+            expect(mockQuery).toHaveBeenCalledWith(
+                'SELECT COUNT(*) FROM "users"',
+                [],
+            );
             expect(result).toBe(42);
         });
 
         it('returns a number, not a string', async () => {
             mockQuery.mockResolvedValueOnce([{ count: '7' }]);
-            expect(typeof await repo.count()).toBe('number');
+            expect(typeof (await repo.count())).toBe('number');
         });
 
         it('builds WHERE clause when where is provided', async () => {
@@ -214,7 +258,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
     describe('save → insert (identity PK)', () => {
         it('inserts without id column when strategy is identity', async () => {
-            mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: 'e@test.com' }]);
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, name: 'Emanuel', email: 'e@test.com' },
+            ]);
 
             const user = new UserFixture();
             user.name = 'Emanuel';
@@ -243,7 +289,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
     describe('save → update', () => {
         it('updates when entity has a pk value', async () => {
-            mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Updated', email: null }]);
+            mockQuery.mockResolvedValueOnce([
+                { id: 1, name: 'Updated', email: null },
+            ]);
 
             const user = new UserFixture();
             user.id = 1;
@@ -270,12 +318,17 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
             await repo.remove(user);
 
-            expect(mockQuery).toHaveBeenCalledWith('DELETE FROM "users" WHERE "id" = $1', [5]);
+            expect(mockQuery).toHaveBeenCalledWith(
+                'DELETE FROM "users" WHERE "id" = $1',
+                [5],
+            );
         });
 
         it('throws MissingPrimaryKeyError when pk value is absent', async () => {
             const user = new UserFixture();
-            await expect(repo.remove(user)).rejects.toThrow(MissingPrimaryKeyError);
+            await expect(repo.remove(user)).rejects.toThrow(
+                MissingPrimaryKeyError,
+            );
         });
 
         it('wraps database errors in QueryError', async () => {
@@ -292,11 +345,15 @@ describe('Repository<UserFixture> (identity PK)', () => {
         it('inserts multiple rows in a single query', async () => {
             mockQuery.mockResolvedValueOnce([
                 { id: 1, name: 'Alice', email: 'a@test.com' },
-                { id: 2, name: 'Bob',   email: 'b@test.com' },
+                { id: 2, name: 'Bob', email: 'b@test.com' },
             ]);
 
-            const a = new UserFixture(); a.name = 'Alice'; a.email = 'a@test.com';
-            const b = new UserFixture(); b.name = 'Bob';   b.email = 'b@test.com';
+            const a = new UserFixture();
+            a.name = 'Alice';
+            a.email = 'a@test.com';
+            const b = new UserFixture();
+            b.name = 'Bob';
+            b.email = 'b@test.com';
             const result = await repo.saveMany([a, b]);
 
             const [sql, params] = mockQuery.mock.calls[0];
@@ -305,7 +362,12 @@ describe('Repository<UserFixture> (identity PK)', () => {
             expect(sql).toContain('($1, $2)');
             expect(sql).toContain('($3, $4)');
             expect(sql).toContain('RETURNING *');
-            expect(params).toEqual(['Alice', 'a@test.com', 'Bob', 'b@test.com']);
+            expect(params).toEqual([
+                'Alice',
+                'a@test.com',
+                'Bob',
+                'b@test.com',
+            ]);
             expect(result).toHaveLength(2);
             expect(result[0]).toBeInstanceOf(UserFixture);
         });
@@ -318,7 +380,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
         it('wraps database errors in QueryError', async () => {
             mockQuery.mockRejectedValueOnce(new Error('constraint violation'));
-            const u = new UserFixture(); u.name = 'X'; u.email = 'x@test.com';
+            const u = new UserFixture();
+            u.name = 'X';
+            u.email = 'x@test.com';
             await expect(repo.saveMany([u])).rejects.toThrow(QueryError);
         });
     });
@@ -329,8 +393,10 @@ describe('Repository<UserFixture> (identity PK)', () => {
         it('deletes multiple rows using ANY($1)', async () => {
             mockQuery.mockResolvedValueOnce([]);
 
-            const a = new UserFixture(); a.id = 1;
-            const b = new UserFixture(); b.id = 2;
+            const a = new UserFixture();
+            a.id = 1;
+            const b = new UserFixture();
+            b.id = 2;
             await repo.removeMany([a, b]);
 
             expect(mockQuery).toHaveBeenCalledWith(
@@ -345,14 +411,18 @@ describe('Repository<UserFixture> (identity PK)', () => {
         });
 
         it('throws MissingPrimaryKeyError when any entity lacks a pk value', async () => {
-            const a = new UserFixture(); a.id = 1;
+            const a = new UserFixture();
+            a.id = 1;
             const b = new UserFixture(); // sem id
-            await expect(repo.removeMany([a, b])).rejects.toThrow(MissingPrimaryKeyError);
+            await expect(repo.removeMany([a, b])).rejects.toThrow(
+                MissingPrimaryKeyError,
+            );
         });
 
         it('wraps database errors in QueryError', async () => {
             mockQuery.mockRejectedValueOnce(new Error('db error'));
-            const u = new UserFixture(); u.id = 1;
+            const u = new UserFixture();
+            u.id = 1;
             await expect(repo.removeMany([u])).rejects.toThrow(QueryError);
         });
     });
@@ -366,14 +436,19 @@ describe('Repository<UserFixture> (identity PK)', () => {
             const affected = await repo.update({ name: 'Bob' }, { id: 1 });
 
             const [sql, params] = mockQuery.mock.calls[0];
-            expect(sql).toBe('UPDATE "users" SET "name" = $1 WHERE "id" = $2 RETURNING 1');
+            expect(sql).toBe(
+                'UPDATE "users" SET "name" = $1 WHERE "id" = $2 RETURNING 1',
+            );
             expect(params).toEqual(['Bob', 1]);
             expect(affected).toBe(1);
         });
 
         it('returns the count of affected rows', async () => {
             mockQuery.mockResolvedValueOnce([{}, {}]);
-            const affected = await repo.update({ email: 'x@test.com' }, { name: 'Alice' });
+            const affected = await repo.update(
+                { email: 'x@test.com' },
+                { name: 'Alice' },
+            );
             expect(affected).toBe(2);
         });
 
@@ -386,12 +461,16 @@ describe('Repository<UserFixture> (identity PK)', () => {
         });
 
         it('throws QueryError when no updatable columns are provided', async () => {
-            await expect(repo.update({}, { id: 1 })).rejects.toThrow(QueryError);
+            await expect(repo.update({}, { id: 1 })).rejects.toThrow(
+                QueryError,
+            );
         });
 
         it('wraps database errors in QueryError', async () => {
             mockQuery.mockRejectedValueOnce(new Error('constraint'));
-            await expect(repo.update({ name: 'X' }, { id: 1 })).rejects.toThrow(QueryError);
+            await expect(repo.update({ name: 'X' }, { id: 1 })).rejects.toThrow(
+                QueryError,
+            );
         });
     });
 
@@ -434,17 +513,38 @@ describe('Repository<UserFixture> (identity PK)', () => {
         const badMeta: IEntityMetadata = {
             tableName: 'orphans',
             className: 'Orphan',
-            columns: [{ propertyKey: 'name', databaseName: 'name', options: {}, primary: false }],
+            columns: [
+                {
+                    propertyKey: 'name',
+                    databaseName: 'name',
+                    options: {},
+                    primary: false,
+                },
+            ],
             relations: [],
         };
 
         it('throws NoPrimaryColumnError on findById', async () => {
-            const badRepo = new Repository(class Orphan { name!: string; }, runner, badMeta);
-            await expect(badRepo.findById(1)).rejects.toThrow(NoPrimaryColumnError);
+            const badRepo = new Repository(
+                class Orphan {
+                    name!: string;
+                },
+                runner,
+                badMeta,
+            );
+            await expect(badRepo.findById(1)).rejects.toThrow(
+                NoPrimaryColumnError,
+            );
         });
 
         it('findAll works without primary column', async () => {
-            const badRepo = new Repository(class Orphan { name!: string; }, runner, badMeta);
+            const badRepo = new Repository(
+                class Orphan {
+                    name!: string;
+                },
+                runner,
+                badMeta,
+            );
             mockQuery.mockResolvedValueOnce([]);
             await expect(badRepo.findAll()).resolves.toEqual([]);
         });
@@ -454,7 +554,11 @@ describe('Repository<UserFixture> (identity PK)', () => {
 
     describe('withTransaction', () => {
         it('returns a new Repository bound to the provided runner', async () => {
-            const txMock = vi.fn().mockResolvedValueOnce([{ id: 1, name: 'TX', email: 'tx@test.com' }]);
+            const txMock = vi
+                .fn()
+                .mockResolvedValueOnce([
+                    { id: 1, name: 'TX', email: 'tx@test.com' },
+                ]);
             const txRepo = repo.withTransaction({ query: txMock });
 
             const result = await txRepo.findAll();
@@ -472,7 +576,9 @@ describe('Repository<UserFixture> (identity PK)', () => {
             await txRepo.findAll();
 
             expect(txMock).toHaveBeenCalledWith(
-                expect.objectContaining({ text: 'SELECT "id", "name", "email" FROM "users"' }),
+                expect.objectContaining({
+                    text: 'SELECT "id", "name", "email" FROM "users"',
+                }),
             );
         });
     });
@@ -521,7 +627,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('coerces numeric string to number for type: number', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '1234.56', is_active: true, created_at: '2026-01-01', label: 'main' },
+            {
+                id: 1,
+                balance: '1234.56',
+                is_active: true,
+                created_at: '2026-01-01',
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -532,7 +644,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('returns null for null numeric column', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: null, is_active: true, created_at: '2026-01-01', label: 'main' },
+            {
+                id: 1,
+                balance: null,
+                is_active: true,
+                created_at: '2026-01-01',
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -542,7 +660,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('coerces value to boolean for type: boolean', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01', label: 'main' },
+            {
+                id: 1,
+                balance: '0',
+                is_active: true,
+                created_at: '2026-01-01',
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -553,7 +677,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('returns null for null boolean column', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '0', is_active: null, created_at: '2026-01-01', label: 'main' },
+            {
+                id: 1,
+                balance: '0',
+                is_active: null,
+                created_at: '2026-01-01',
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -563,7 +693,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('coerces string to Date for type: datetime', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01T00:00:00.000Z', label: 'main' },
+            {
+                id: 1,
+                balance: '0',
+                is_active: true,
+                created_at: '2026-01-01T00:00:00.000Z',
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -573,7 +709,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('returns null for null datetime column', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '0', is_active: true, created_at: null, label: 'main' },
+            {
+                id: 1,
+                balance: '0',
+                is_active: true,
+                created_at: null,
+                label: 'main',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -583,7 +725,13 @@ describe('Repository<AccountFixture> — type casting', () => {
 
     it('leaves string column unchanged without type cast', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, balance: '0', is_active: true, created_at: '2026-01-01', label: 'savings' },
+            {
+                id: 1,
+                balance: '0',
+                is_active: true,
+                created_at: '2026-01-01',
+                label: 'savings',
+            },
         ]);
 
         const result = await repo.findAll();
@@ -600,13 +748,26 @@ describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
         tableName: 'sequences',
         className: 'Sequence',
         columns: [
-            { propertyKey: 'id',  databaseName: 'id',  options: {},                 primary: true  },
-            { propertyKey: 'seq', databaseName: 'seq', options: { type: 'bigint' }, primary: false },
+            {
+                propertyKey: 'id',
+                databaseName: 'id',
+                options: {},
+                primary: true,
+            },
+            {
+                propertyKey: 'seq',
+                databaseName: 'seq',
+                options: { type: 'bigint' },
+                primary: false,
+            },
         ],
         relations: [],
     };
 
-    class Sequence { id!: number; seq!: bigint; }
+    class Sequence {
+        id!: number;
+        seq!: bigint;
+    }
 
     let mockQuery: Mock;
     let repo: Repository<Sequence>;
@@ -617,7 +778,9 @@ describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
     });
 
     it('coerces INT8 string to BigInt', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, seq: '9223372036854775807' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, seq: '9223372036854775807' },
+        ]);
 
         const result = await repo.findAll();
 
@@ -640,10 +803,19 @@ describe("type: 'bigint' — pg INT8/BIGINT coercion", () => {
             ...bigintMeta,
             columns: [
                 ...bigintMeta.columns,
-                { propertyKey: 'seqNull', databaseName: 'seq_null', options: { type: 'bigint' }, primary: false },
+                {
+                    propertyKey: 'seqNull',
+                    databaseName: 'seq_null',
+                    options: { type: 'bigint' },
+                    primary: false,
+                },
             ],
         };
-        class SeqWithNull { id!: number; seq!: bigint; seqNull!: bigint | null; }
+        class SeqWithNull {
+            id!: number;
+            seq!: bigint;
+            seqNull!: bigint | null;
+        }
         const r = new Repository(SeqWithNull, { query: mockQuery }, nullMeta);
 
         mockQuery.mockResolvedValueOnce([{ id: 1, seq: '1', seq_null: null }]);
@@ -661,12 +833,25 @@ describe("type: 'iso' — TIMESTAMP → UTC ISO string", () => {
         tableName: 'events',
         className: 'Event',
         columns: [
-            { propertyKey: 'id',         databaseName: 'id',          options: {},                primary: true  },
-            { propertyKey: 'occurredAt', databaseName: 'occurred_at', options: { type: 'iso' },   primary: false },
+            {
+                propertyKey: 'id',
+                databaseName: 'id',
+                options: {},
+                primary: true,
+            },
+            {
+                propertyKey: 'occurredAt',
+                databaseName: 'occurred_at',
+                options: { type: 'iso' },
+                primary: false,
+            },
         ],
         relations: [],
     };
-    class Event { id!: number; occurredAt!: string; }
+    class Event {
+        id!: number;
+        occurredAt!: string;
+    }
 
     let mockQuery: Mock;
     let repo: Repository<Event>;
@@ -687,7 +872,9 @@ describe("type: 'iso' — TIMESTAMP → UTC ISO string", () => {
     });
 
     it('accepts a raw date string and normalises to ISO', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, occurred_at: '2026-03-13T15:00:00.000Z' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, occurred_at: '2026-03-13T15:00:00.000Z' },
+        ]);
 
         const result = await repo.findAll();
 
@@ -708,12 +895,25 @@ describe("type: 'date' — DATE → YYYY-MM-DD string (no time, no timezone shif
         tableName: 'profiles',
         className: 'Profile',
         columns: [
-            { propertyKey: 'id',        databaseName: 'id',         options: {},               primary: true  },
-            { propertyKey: 'birthDate', databaseName: 'birth_date', options: { type: 'date' }, primary: false },
+            {
+                propertyKey: 'id',
+                databaseName: 'id',
+                options: {},
+                primary: true,
+            },
+            {
+                propertyKey: 'birthDate',
+                databaseName: 'birth_date',
+                options: { type: 'date' },
+                primary: false,
+            },
         ],
         relations: [],
     };
-    class Profile { id!: number; birthDate!: string; }
+    class Profile {
+        id!: number;
+        birthDate!: string;
+    }
 
     let mockQuery: Mock;
     let repo: Repository<Profile>;
@@ -759,7 +959,9 @@ describe('findOne', () => {
     });
 
     it('returns the first entity when a match exists', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: 'e@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Emanuel', email: 'e@test.com' },
+        ]);
 
         const result = await repo.findOne({ where: { name: 'Emanuel' } });
 
@@ -768,7 +970,9 @@ describe('findOne', () => {
     });
 
     it('appends LIMIT 1 to the query', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: null }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Emanuel', email: null },
+        ]);
 
         await repo.findOne({ where: { name: 'Emanuel' } });
 
@@ -785,7 +989,9 @@ describe('findOne', () => {
     });
 
     it('works without options (no WHERE clause)', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Emanuel', email: null }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Emanuel', email: null },
+        ]);
 
         const result = await repo.findOne();
 
@@ -807,7 +1013,9 @@ describe('findOneOrFail', () => {
     });
 
     it('returns the entity when found', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 2, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 2, name: 'Alice', email: 'alice@test.com' },
+        ]);
 
         const result = await repo.findOneOrFail({ where: { name: 'Alice' } });
 
@@ -818,7 +1026,9 @@ describe('findOneOrFail', () => {
     it('throws EntityNotFoundError when no row matches', async () => {
         mockQuery.mockResolvedValueOnce([]);
 
-        await expect(repo.findOneOrFail({ where: { name: 'Ghost' } })).rejects.toThrow(EntityNotFoundError);
+        await expect(
+            repo.findOneOrFail({ where: { name: 'Ghost' } }),
+        ).rejects.toThrow(EntityNotFoundError);
     });
 
     it('error message includes the entity class name', async () => {
@@ -836,7 +1046,11 @@ describe('@ManyToOne — find({ relations })', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(BookFixture, { query: mockQuery }, registry.getEntity('BookFixture')!);
+        repo = new Repository(
+            BookFixture,
+            { query: mockQuery },
+            registry.getEntity('BookFixture')!,
+        );
     });
 
     it('builds LEFT JOIN SQL and selects prefixed relation columns', async () => {
@@ -851,10 +1065,15 @@ describe('@ManyToOne — find({ relations })', () => {
     });
 
     it('hydrates the related AuthorFixture and attaches it to book.author', async () => {
-        mockQuery.mockResolvedValueOnce([{
-            id: 1, title: 'Clean Code', author_id: 10,
-            'mirror__author__id': 10, 'mirror__author__name': 'Robert Martin',
-        }]);
+        mockQuery.mockResolvedValueOnce([
+            {
+                id: 1,
+                title: 'Clean Code',
+                author_id: 10,
+                mirror__author__id: 10,
+                mirror__author__name: 'Robert Martin',
+            },
+        ]);
 
         const [book] = await repo.find({ relations: ['author'] });
 
@@ -865,10 +1084,15 @@ describe('@ManyToOne — find({ relations })', () => {
     });
 
     it('sets author to null when LEFT JOIN has no match (FK is null)', async () => {
-        mockQuery.mockResolvedValueOnce([{
-            id: 2, title: 'Orphan Book', author_id: null,
-            'mirror__author__id': null, 'mirror__author__name': null,
-        }]);
+        mockQuery.mockResolvedValueOnce([
+            {
+                id: 2,
+                title: 'Orphan Book',
+                author_id: null,
+                mirror__author__id: null,
+                mirror__author__name: null,
+            },
+        ]);
 
         const [book] = await repo.find({ relations: ['author'] });
 
@@ -877,7 +1101,11 @@ describe('@ManyToOne — find({ relations })', () => {
 
     it('still supports WHERE + LIMIT combined with relations', async () => {
         mockQuery.mockResolvedValueOnce([]);
-        await repo.find({ relations: ['author'], where: { title: 'X' }, limit: 5 });
+        await repo.find({
+            relations: ['author'],
+            where: { title: 'X' },
+            limit: 5,
+        });
 
         const [sql] = mockQuery.mock.calls[0];
         expect(sql).toContain('WHERE');
@@ -894,15 +1122,22 @@ describe('@OneToMany — find({ relations })', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(AuthorFixture, { query: mockQuery }, registry.getEntity('AuthorFixture')!);
+        repo = new Repository(
+            AuthorFixture,
+            { query: mockQuery },
+            registry.getEntity('AuthorFixture')!,
+        );
     });
 
     it('executes main query then a batch query with ANY($1)', async () => {
         mockQuery
-            .mockResolvedValueOnce([{ id: 1, name: 'Robert Martin' }, { id: 2, name: 'Martin Fowler' }])
             .mockResolvedValueOnce([
-                { id: 10, title: 'Clean Code',   author_id: 1 },
-                { id: 11, title: 'Refactoring',  author_id: 2 },
+                { id: 1, name: 'Robert Martin' },
+                { id: 2, name: 'Martin Fowler' },
+            ])
+            .mockResolvedValueOnce([
+                { id: 10, title: 'Clean Code', author_id: 1 },
+                { id: 11, title: 'Refactoring', author_id: 2 },
             ]);
 
         await repo.find({ relations: ['books'] });
@@ -915,11 +1150,14 @@ describe('@OneToMany — find({ relations })', () => {
 
     it('groups books by author and attaches them correctly', async () => {
         mockQuery
-            .mockResolvedValueOnce([{ id: 1, name: 'Robert Martin' }, { id: 2, name: 'Martin Fowler' }])
             .mockResolvedValueOnce([
-                { id: 10, title: 'Clean Code',       author_id: 1 },
+                { id: 1, name: 'Robert Martin' },
+                { id: 2, name: 'Martin Fowler' },
+            ])
+            .mockResolvedValueOnce([
+                { id: 10, title: 'Clean Code', author_id: 1 },
                 { id: 12, title: 'Clean Architecture', author_id: 1 },
-                { id: 11, title: 'Refactoring',       author_id: 2 },
+                { id: 11, title: 'Refactoring', author_id: 2 },
             ]);
 
         const authors = await repo.find({ relations: ['books'] });
@@ -945,7 +1183,10 @@ describe('@OneToMany — find({ relations })', () => {
 // ─── RepositoryState.quoteIdentifier ─────────────────────────────────────────
 
 describe('RepositoryState.quoteIdentifier', () => {
-    const state = new RepositoryState(UserFixture, registry.getEntity('UserFixture')!);
+    const state = new RepositoryState(
+        UserFixture,
+        registry.getEntity('UserFixture')!,
+    );
 
     it('envolve o identificador em aspas duplas', () => {
         expect(state.quoteIdentifier('users')).toBe('"users"');
@@ -968,9 +1209,15 @@ describe('AsyncLocalStorage — propagação implícita de transação', () => {
     let repo: Repository<UserFixture>;
 
     beforeEach(() => {
-        defaultMock = vi.fn().mockResolvedValue([{ id: 1, name: 'Default', email: 'x' }]);
-        txMock      = vi.fn().mockResolvedValue([{ id: 2, name: 'TX',      email: 'y' }]);
-        repo = new Repository(UserFixture, { query: defaultMock }, registry.getEntity('UserFixture')!);
+        defaultMock = vi
+            .fn()
+            .mockResolvedValue([{ id: 1, name: 'Default', email: 'x' }]);
+        txMock = vi.fn().mockResolvedValue([{ id: 2, name: 'TX', email: 'y' }]);
+        repo = new Repository(
+            UserFixture,
+            { query: defaultMock },
+            registry.getEntity('UserFixture')!,
+        );
     });
 
     it('usa o runner padrão fora de qualquer contexto de transação', async () => {
@@ -1000,7 +1247,9 @@ describe('AsyncLocalStorage — propagação implícita de transação', () => {
     });
 
     it('withTransaction ignora o ALS (runner pinado tem precedência)', async () => {
-        const pinnedMock = vi.fn().mockResolvedValue([{ id: 3, name: 'Pinned', email: 'z' }]);
+        const pinnedMock = vi
+            .fn()
+            .mockResolvedValue([{ id: 3, name: 'Pinned', email: 'z' }]);
         const pinnedRepo = repo.withTransaction({ query: pinnedMock });
 
         let result: UserFixture[] = [];
@@ -1014,15 +1263,23 @@ describe('AsyncLocalStorage — propagação implícita de transação', () => {
     });
 
     it('contextos paralelos são isolados entre si', async () => {
-        const txMockA = vi.fn().mockResolvedValue([{ id: 10, name: 'A', email: 'a' }]);
-        const txMockB = vi.fn().mockResolvedValue([{ id: 20, name: 'B', email: 'b' }]);
+        const txMockA = vi
+            .fn()
+            .mockResolvedValue([{ id: 10, name: 'A', email: 'a' }]);
+        const txMockB = vi
+            .fn()
+            .mockResolvedValue([{ id: 20, name: 'B', email: 'b' }]);
 
         let resultA: UserFixture[] = [];
         let resultB: UserFixture[] = [];
 
         await Promise.all([
-            transactionStore.run({ query: txMockA }, async () => { resultA = await repo.findAll(); }),
-            transactionStore.run({ query: txMockB }, async () => { resultB = await repo.findAll(); }),
+            transactionStore.run({ query: txMockA }, async () => {
+                resultA = await repo.findAll();
+            }),
+            transactionStore.run({ query: txMockB }, async () => {
+                resultB = await repo.findAll();
+            }),
         ]);
 
         expect(resultA[0].name).toBe('A');
@@ -1032,7 +1289,9 @@ describe('AsyncLocalStorage — propagação implícita de transação', () => {
     });
 
     it('withTransaction em contexto ALS usa o runner pinado, não o ALS', async () => {
-        const pinnedMock2 = vi.fn().mockResolvedValue([{ id: 99, name: 'Pinned2', email: 'p' }]);
+        const pinnedMock2 = vi
+            .fn()
+            .mockResolvedValue([{ id: 99, name: 'Pinned2', email: 'p' }]);
         const pinnedRepo2 = repo.withTransaction({ query: pinnedMock2 });
 
         await transactionStore.run({ query: txMock }, async () => {
@@ -1053,17 +1312,25 @@ describe('Dirty checking — save() com snapshot', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(UserFixture, { query: mockQuery }, registry.getEntity('UserFixture')!);
+        repo = new Repository(
+            UserFixture,
+            { query: mockQuery },
+            registry.getEntity('UserFixture')!,
+        );
     });
 
     it('find() armazena snapshot na entidade retornada', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const [user] = await repo.find({});
         expect(entitySnapshots.has(user as object)).toBe(true);
     });
 
     it('save() sem alterações não emite UPDATE', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const [user] = await repo.find({});
 
         const result = await repo.save(user);
@@ -1073,11 +1340,15 @@ describe('Dirty checking — save() com snapshot', () => {
     });
 
     it('save() com campo alterado emite UPDATE apenas com a coluna suja', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const [user] = await repo.find({});
 
         user.name = 'Alice Updated';
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice Updated', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice Updated', email: 'alice@test.com' },
+        ]);
         await repo.save(user);
 
         const [updateSql, updateParams] = mockQuery.mock.calls[1];
@@ -1088,11 +1359,15 @@ describe('Dirty checking — save() com snapshot', () => {
     });
 
     it('save() atualiza o snapshot após UPDATE para detectar novo diff', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const [user] = await repo.find({});
 
         user.name = 'Alice Updated';
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice Updated', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice Updated', email: 'alice@test.com' },
+        ]);
         const saved = await repo.save(user);
 
         // Segundo save sem alteração não deve emitir UPDATE
@@ -1105,7 +1380,9 @@ describe('Dirty checking — save() com snapshot', () => {
         const user = new UserFixture();
         user.name = 'Bob';
         user.email = 'bob@test.com';
-        mockQuery.mockResolvedValueOnce([{ id: 2, name: 'Bob', email: 'bob@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 2, name: 'Bob', email: 'bob@test.com' },
+        ]);
 
         await repo.save(user);
 
@@ -1114,11 +1391,15 @@ describe('Dirty checking — save() com snapshot', () => {
     });
 
     it('findAll() e findById() também armazenam snapshot', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const [fromAll] = await repo.findAll();
         expect(entitySnapshots.has(fromAll as object)).toBe(true);
 
-        mockQuery.mockResolvedValueOnce([{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, name: 'Alice', email: 'alice@test.com' },
+        ]);
         const fromId = await repo.findById(1);
         expect(entitySnapshots.has(fromId as object)).toBe(true);
     });
@@ -1132,7 +1413,11 @@ describe('QueryError.verbose', () => {
     });
 
     it('sem verbose: mensagem não contém SQL nem params', () => {
-        const err = new QueryError('SELECT * FROM users', new Error('syntax error'), [42]);
+        const err = new QueryError(
+            'SELECT * FROM users',
+            new Error('syntax error'),
+            [42],
+        );
         expect(err.message).not.toContain('SELECT');
         expect(err.message).not.toContain('42');
         expect(err.message).toBe('Query failed: syntax error');
@@ -1140,13 +1425,21 @@ describe('QueryError.verbose', () => {
 
     it('com verbose: mensagem contém SQL', () => {
         QueryError.verbose = true;
-        const err = new QueryError('SELECT * FROM users WHERE id = $1', new Error('oops'), [99]);
+        const err = new QueryError(
+            'SELECT * FROM users WHERE id = $1',
+            new Error('oops'),
+            [99],
+        );
         expect(err.message).toContain('SELECT * FROM users WHERE id = $1');
     });
 
     it('com verbose: mensagem contém params serializado', () => {
         QueryError.verbose = true;
-        const err = new QueryError('SELECT 1', new Error('oops'), [1, 'alice', true]);
+        const err = new QueryError('SELECT 1', new Error('oops'), [
+            1,
+            'alice',
+            true,
+        ]);
         expect(err.message).toContain('[1,"alice",true]');
     });
 

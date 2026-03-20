@@ -12,13 +12,21 @@ export class SQLiteDialect implements IDialect {
         return '?';
     }
 
-    public buildArrayInClause(quotedColumn: string, ids: Array<unknown>, params: Array<unknown>): string {
-        ids.forEach(id => params.push(id));
+    public buildArrayInClause(
+        quotedColumn: string,
+        ids: Array<unknown>,
+        params: Array<unknown>,
+    ): string {
+        ids.forEach((id) => params.push(id));
         const placeholders = ids.map(() => '?').join(', ');
         return `${quotedColumn} IN (${placeholders})`;
     }
 
-    public buildLimitOffset(_hasOrderBy: boolean, limit?: number, offset?: number): string {
+    public buildLimitOffset(
+        _hasOrderBy: boolean,
+        limit?: number,
+        offset?: number,
+    ): string {
         let sql = '';
         if (limit !== undefined) sql += ` LIMIT ${limit}`;
         if (offset !== undefined) sql += ` OFFSET ${offset}`;

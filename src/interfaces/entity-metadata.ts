@@ -1,6 +1,6 @@
-import { IColumnMetadata } from "./column-metadata";
-import { IEntityHooks } from "./entity-hooks";
-import { IRelationMetadata } from "./relation-metadata";
+import { IColumnMetadata } from './column-metadata';
+import { IEntityHooks } from './entity-hooks';
+import { IRelationMetadata } from './relation-metadata';
 
 export interface IEmbedMetadata {
     propertyKey: string;

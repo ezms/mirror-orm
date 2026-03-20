@@ -12,9 +12,9 @@ import { Like } from '../operators';
 @Entity({
     tableName: 'products',
     filters: {
-        active:     { status: 'active' },
-        inStock:    { stock: 1 },
-        expensive:  { price: 100 },
+        active: { status: 'active' },
+        inStock: { stock: 1 },
+        expensive: { price: 100 },
     },
 })
 class ProductFixture {
@@ -37,19 +37,27 @@ describe('Global query filters', () => {
     beforeEach(() => {
         mockQuery = vi.fn().mockResolvedValue([]);
         runner = { query: mockQuery };
-        repo = new Repository(ProductFixture, runner, registry.getEntity('ProductFixture')!);
+        repo = new Repository(
+            ProductFixture,
+            runner,
+            registry.getEntity('ProductFixture')!,
+        );
     });
 
     it('find without filters emits no extra WHERE clause', async () => {
         await repo.find({});
         const [sql] = mockQuery.mock.calls[0];
-        expect(sql).toBe('SELECT "id", "name", "status", "stock", "price" FROM "products"');
+        expect(sql).toBe(
+            'SELECT "id", "name", "status", "stock", "price" FROM "products"',
+        );
     });
 
     it('single filter appends AND clause', async () => {
         await repo.find({ filters: ['active'] });
         const [sql, params] = mockQuery.mock.calls[0];
-        expect(sql).toBe('SELECT "id", "name", "status", "stock", "price" FROM "products" WHERE "status" = $1');
+        expect(sql).toBe(
+            'SELECT "id", "name", "status", "stock", "price" FROM "products" WHERE "status" = $1',
+        );
         expect(params).toEqual(['active']);
     });
 
@@ -72,13 +80,17 @@ describe('Global query filters', () => {
     it('unknown filter name is silently ignored', async () => {
         await repo.find({ filters: ['nonExistent'] });
         const [sql] = mockQuery.mock.calls[0];
-        expect(sql).toBe('SELECT "id", "name", "status", "stock", "price" FROM "products"');
+        expect(sql).toBe(
+            'SELECT "id", "name", "status", "stock", "price" FROM "products"',
+        );
     });
 
     it('empty filters array is treated as no filters', async () => {
         await repo.find({ filters: [] });
         const [sql] = mockQuery.mock.calls[0];
-        expect(sql).toBe('SELECT "id", "name", "status", "stock", "price" FROM "products"');
+        expect(sql).toBe(
+            'SELECT "id", "name", "status", "stock", "price" FROM "products"',
+        );
     });
 
     it('filter params are appended after explicit where params', async () => {
@@ -99,7 +111,11 @@ describe('Global query filters', () => {
         }
         void ItemFixture;
 
-        const itemRepo = new Repository(ItemFixture, runner, registry.getEntity('ItemFixture')!);
+        const itemRepo = new Repository(
+            ItemFixture,
+            runner,
+            registry.getEntity('ItemFixture')!,
+        );
         await itemRepo.find({ filters: ['search'] });
         const [sql] = mockQuery.mock.calls[0];
         expect(sql).toContain('"name" LIKE $1');

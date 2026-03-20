@@ -7,7 +7,10 @@ export class SavepointRunner implements ITransactionRunner {
         private readonly name: string,
     ) {}
 
-    public query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+    public query<T = unknown>(
+        input: string | INamedQuery,
+        params?: Array<unknown>,
+    ): Promise<Array<T>> {
         return this.inner.query<T>(input, params);
     }
 

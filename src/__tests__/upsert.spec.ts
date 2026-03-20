@@ -47,7 +47,15 @@ function makeRunner() {
         query: async (sql: string | { text: string }, params?: unknown[]) => {
             const text = typeof sql === 'string' ? sql : sql.text;
             calls.push({ sql: text, params: params ?? [] });
-            return [{ id: 'gen-id', name: 'Alice', email: 'a@x.com', created_at: new Date(), updated_at: new Date() }];
+            return [
+                {
+                    id: 'gen-id',
+                    name: 'Alice',
+                    email: 'a@x.com',
+                    created_at: new Date(),
+                    updated_at: new Date(),
+                },
+            ];
         },
         calls,
     };
@@ -65,7 +73,10 @@ describe('upsert', () => {
     it('emits INSERT ... ON CONFLICT ... DO UPDATE SET', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email']);
         expect(runner.calls[0].sql).toContain('ON CONFLICT');
         expect(runner.calls[0].sql).toContain('DO UPDATE SET');
@@ -75,7 +86,10 @@ describe('upsert', () => {
     it('uses the correct conflict column', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email']);
         expect(runner.calls[0].sql).toContain('ON CONFLICT ("email")');
     });
@@ -83,7 +97,10 @@ describe('upsert', () => {
     it('excludes createdAt from the DO UPDATE SET clause', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email']);
         const afterConflict = runner.calls[0].sql.split('DO UPDATE SET')[1];
         expect(afterConflict).not.toContain('created_at');
@@ -92,7 +109,10 @@ describe('upsert', () => {
     it('includes updatedAt in the DO UPDATE SET clause', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email']);
         const afterConflict = runner.calls[0].sql.split('DO UPDATE SET')[1];
         expect(afterConflict).toContain('updated_at');
@@ -101,7 +121,10 @@ describe('upsert', () => {
     it('excludes conflictKeys from the DO UPDATE SET clause', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email']);
         const afterConflict = runner.calls[0].sql.split('DO UPDATE SET')[1];
         expect(afterConflict).not.toContain('"email" = EXCLUDED');
@@ -110,7 +133,10 @@ describe('upsert', () => {
     it('respects explicit update option', async () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com' });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+        });
         await repo.upsert(user, ['email'], { update: ['name'] });
         const afterConflict = runner.calls[0].sql.split('DO UPDATE SET')[1];
         expect(afterConflict).toContain('"name"');
@@ -125,7 +151,11 @@ describe('upsert', () => {
             return [{ id: 1, section: 'A', row: '1', status: 'taken' }];
         };
         const repo = makeRepo(UpSeat, runner);
-        const seat = Object.assign(new UpSeat(), { section: 'A', row: '1', status: 'taken' });
+        const seat = Object.assign(new UpSeat(), {
+            section: 'A',
+            row: '1',
+            status: 'taken',
+        });
         await repo.upsert(seat, ['section', 'row']);
         expect(runner.calls[0].sql).toContain('ON CONFLICT ("section", "row")');
     });
@@ -134,7 +164,11 @@ describe('upsert', () => {
         const runner = makeRunner();
         const repo = makeRepo(UpUser, runner);
         const existingDate = new Date('2026-01-01');
-        const user = Object.assign(new UpUser(), { name: 'Alice', email: 'a@x.com', createdAt: existingDate });
+        const user = Object.assign(new UpUser(), {
+            name: 'Alice',
+            email: 'a@x.com',
+            createdAt: existingDate,
+        });
         await repo.upsert(user, ['email']);
         const paramsStr = JSON.stringify(runner.calls[0].params);
         expect(paramsStr).toContain('2026-01-01');

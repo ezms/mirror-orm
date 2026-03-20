@@ -7,7 +7,11 @@ class MetadataRegistry {
         this.entities.set(className, metadata);
     }
 
-    public registerStiChild(parentClassName: string, discriminatorValue: string, ctor: new () => unknown): void {
+    public registerStiChild(
+        parentClassName: string,
+        discriminatorValue: string,
+        ctor: new () => unknown,
+    ): void {
         const meta = this.entities.get(parentClassName);
         if (!meta) return;
         if (!meta.stiChildren) meta.stiChildren = new Map();

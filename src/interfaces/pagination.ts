@@ -1,6 +1,9 @@
 import { IFindOptions } from './find-options';
 
-export type IPaginationOptions<T> = Omit<IFindOptions<T>, 'limit' | 'offset'> & {
+export type IPaginationOptions<T> = Omit<
+    IFindOptions<T>,
+    'limit' | 'offset'
+> & {
     page: number;
     limit: number;
 };

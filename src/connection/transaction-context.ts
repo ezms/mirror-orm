@@ -8,7 +8,10 @@ export class TransactionContext implements IQueryRunner {
         private readonly repoFactory: <T>(target: new () => T) => Repository<T>,
     ) {}
 
-    public query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
+    public query<T = unknown>(
+        input: string | INamedQuery,
+        params?: Array<unknown>,
+    ): Promise<Array<T>> {
         return this.runner.query<T>(input, params);
     }
 

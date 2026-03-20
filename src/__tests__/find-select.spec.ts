@@ -80,7 +80,9 @@ describe('find({ select })', () => {
     it('ignores unknown keys in select', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
-        await repo.find({ select: ['id', 'name', 'nonExistent' as keyof FsUser & string] });
+        await repo.find({
+            select: ['id', 'name', 'nonExistent' as keyof FsUser & string],
+        });
         expect(runner.calls[0].sql).toContain('"id"');
         expect(runner.calls[0].sql).toContain('"name"');
         expect(runner.calls[0].sql).not.toContain('nonExistent');
@@ -100,24 +102,28 @@ describe('findAndCount', () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
         await repo.findAndCount({});
-        const sqls = runner.calls.map(c => c.sql);
-        expect(sqls.some(s => s.includes('SELECT "id"'))).toBe(true);
-        expect(sqls.some(s => s.includes('COUNT(*)'))).toBe(true);
+        const sqls = runner.calls.map((c) => c.sql);
+        expect(sqls.some((s) => s.includes('SELECT "id"'))).toBe(true);
+        expect(sqls.some((s) => s.includes('COUNT(*)'))).toBe(true);
     });
 
     it('passes where clause to both queries', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
         await repo.findAndCount({ where: { name: 'Alice' } });
-        const withWhere = runner.calls.filter(c => c.sql.includes('WHERE'));
+        const withWhere = runner.calls.filter((c) => c.sql.includes('WHERE'));
         expect(withWhere).toHaveLength(2);
     });
 
     it('count reflects total ignoring limit and offset', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
-        await repo.findAndCount({ limit: 10, offset: 20, where: { name: 'Alice' } });
-        const countCall = runner.calls.find(c => c.sql.includes('COUNT(*)'));
+        await repo.findAndCount({
+            limit: 10,
+            offset: 20,
+            where: { name: 'Alice' },
+        });
+        const countCall = runner.calls.find((c) => c.sql.includes('COUNT(*)'));
         expect(countCall!.sql).not.toContain('LIMIT');
         expect(countCall!.sql).not.toContain('OFFSET');
     });

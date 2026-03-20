@@ -14,7 +14,11 @@ describe('@ManyToMany — article.tags', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(ArticleFixture, { query: mockQuery } as IQueryRunner, registry.getEntity('ArticleFixture')!);
+        repo = new Repository(
+            ArticleFixture,
+            { query: mockQuery } as IQueryRunner,
+            registry.getEntity('ArticleFixture')!,
+        );
     });
 
     it('gera batch query com INNER JOIN na join table', async () => {
@@ -50,15 +54,18 @@ describe('@ManyToMany — article.tags', () => {
                 { id: 2, title: 'Refactoring' },
             ])
             .mockResolvedValueOnce([
-                { id: 10, name: 'OOP',         _mirror_mtm_fk_: 1 },
+                { id: 10, name: 'OOP', _mirror_mtm_fk_: 1 },
                 { id: 11, name: 'Best Practices', _mirror_mtm_fk_: 1 },
-                { id: 12, name: 'Refactoring',  _mirror_mtm_fk_: 2 },
+                { id: 12, name: 'Refactoring', _mirror_mtm_fk_: 2 },
             ]);
 
         const articles = await repo.find({ relations: ['tags'] });
 
         expect(articles[0].tags).toHaveLength(2);
-        expect(articles[0].tags.map(t => t.name).sort()).toEqual(['Best Practices', 'OOP']);
+        expect(articles[0].tags.map((t) => t.name).sort()).toEqual([
+            'Best Practices',
+            'OOP',
+        ]);
         expect(articles[1].tags).toHaveLength(1);
         expect(articles[1].tags[0].name).toBe('Refactoring');
     });
@@ -94,13 +101,17 @@ describe('@ManyToMany — article.tags', () => {
         const [article] = await repo.find({});
 
         expect(mockQuery).toHaveBeenCalledTimes(1);
-        expect((article as unknown as Record<string, unknown>).tags).toBeUndefined();
+        expect(
+            (article as unknown as Record<string, unknown>).tags,
+        ).toBeUndefined();
     });
 
     it('tag hidratada é instanceof TagFixture', async () => {
         mockQuery
             .mockResolvedValueOnce([{ id: 1, title: 'Clean Code' }])
-            .mockResolvedValueOnce([{ id: 10, name: 'OOP', _mirror_mtm_fk_: 1 }]);
+            .mockResolvedValueOnce([
+                { id: 10, name: 'OOP', _mirror_mtm_fk_: 1 },
+            ]);
 
         const [article] = await repo.find({ relations: ['tags'] });
 
@@ -132,7 +143,11 @@ describe('@ManyToMany — tag.articles (lado inverso)', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(TagFixture, { query: mockQuery } as IQueryRunner, registry.getEntity('TagFixture')!);
+        repo = new Repository(
+            TagFixture,
+            { query: mockQuery } as IQueryRunner,
+            registry.getEntity('TagFixture')!,
+        );
     });
 
     it('ownerFk e inverseFk são trocados no lado inverso', async () => {
@@ -154,14 +169,19 @@ describe('@ManyToMany — tag.articles (lado inverso)', () => {
         mockQuery
             .mockResolvedValueOnce([{ id: 10, name: 'OOP' }])
             .mockResolvedValueOnce([
-                { id: 1, title: 'Clean Code',    _mirror_mtm_fk_: 10 },
-                { id: 2, title: 'Refactoring',   _mirror_mtm_fk_: 10 },
+                { id: 1, title: 'Clean Code', _mirror_mtm_fk_: 10 },
+                { id: 2, title: 'Refactoring', _mirror_mtm_fk_: 10 },
             ]);
 
         const [tag] = await repo.find({ relations: ['articles'] });
 
         expect(tag.articles).toHaveLength(2);
-        expect(tag.articles.every(a => a instanceof ArticleFixture)).toBe(true);
-        expect(tag.articles.map(a => a.title).sort()).toEqual(['Clean Code', 'Refactoring']);
+        expect(tag.articles.every((a) => a instanceof ArticleFixture)).toBe(
+            true,
+        );
+        expect(tag.articles.map((a) => a.title).sort()).toEqual([
+            'Clean Code',
+            'Refactoring',
+        ]);
     });
 });

@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Column, Entity, ManyToOne, OneToMany, OneToOne, PrimaryColumn } from '../index';
+import {
+    Column,
+    Entity,
+    ManyToOne,
+    OneToMany,
+    OneToOne,
+    PrimaryColumn,
+} from '../index';
 import { Repository } from '../repository/repository';
 import { registry } from '../metadata/registry';
 
@@ -64,7 +71,16 @@ class CUser {
 function makeRunner() {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
     const queue: Array<unknown[]> = [];
-    const defaultRow = [{ id: 'gen-id', name: 'x', title: 'x', bio: 'x', author_id: null, user_id: null }];
+    const defaultRow = [
+        {
+            id: 'gen-id',
+            name: 'x',
+            title: 'x',
+            bio: 'x',
+            author_id: null,
+            user_id: null,
+        },
+    ];
     const runner = {
         query: vi.fn(async (sql: string, params?: unknown[]) => {
             const text = typeof sql === 'string' ? sql : (sql as any).text;
@@ -72,14 +88,20 @@ function makeRunner() {
             return queue.length > 0 ? queue.shift()! : defaultRow;
         }),
         calls,
-        queueOnce: (...rows: unknown[][]) => { queue.push(...rows); },
+        queueOnce: (...rows: unknown[][]) => {
+            queue.push(...rows);
+        },
     };
     return runner;
 }
 
 function makeRepo<T>(cls: new () => T, runner: ReturnType<typeof makeRunner>) {
     const meta = registry.getEntity(cls.name)!;
-    return new Repository(cls, runner as unknown as import('../interfaces/query-runner').IQueryRunner, meta);
+    return new Repository(
+        cls,
+        runner as unknown as import('../interfaces/query-runner').IQueryRunner,
+        meta,
+    );
 }
 
 // ─── cascade: save — ManyToOne ────────────────────────────────────────────────
@@ -90,28 +112,49 @@ describe('cascade save — @ManyToOne', () => {
         const repo = makeRepo(CPost, runner);
 
         const author = Object.assign(new CAuthor(), { name: 'Martin' });
-        const post = Object.assign(new CPost(), { title: 'Clean Code', author });
+        const post = Object.assign(new CPost(), {
+            title: 'Clean Code',
+            author,
+        });
 
         await repo.save(post);
 
-        const sqls = runner.calls.map(c => c.sql);
-        const authorInsertIdx = sqls.findIndex(s => s.includes('cascade_authors'));
-        const postInsertIdx = sqls.findIndex(s => s.includes('cascade_posts'));
+        const sqls = runner.calls.map((c) => c.sql);
+        const authorInsertIdx = sqls.findIndex((s) =>
+            s.includes('cascade_authors'),
+        );
+        const postInsertIdx = sqls.findIndex((s) =>
+            s.includes('cascade_posts'),
+        );
         expect(authorInsertIdx).toBeGreaterThanOrEqual(0);
         expect(postInsertIdx).toBeGreaterThan(authorInsertIdx);
     });
 
     it('injects FK from saved related into main entity record', async () => {
         const runner = makeRunner();
-        runner.queueOnce([{ id: 'author-pk', name: 'Martin', author_id: null, user_id: null, title: 'x', bio: 'x' }]);
+        runner.queueOnce([
+            {
+                id: 'author-pk',
+                name: 'Martin',
+                author_id: null,
+                user_id: null,
+                title: 'x',
+                bio: 'x',
+            },
+        ]);
 
         const repo = makeRepo(CPost, runner);
         const author = Object.assign(new CAuthor(), { name: 'Martin' });
-        const post = Object.assign(new CPost(), { title: 'Clean Code', author });
+        const post = Object.assign(new CPost(), {
+            title: 'Clean Code',
+            author,
+        });
 
         await repo.save(post);
 
-        const postInsert = runner.calls.find(c => c.sql.includes('cascade_posts'));
+        const postInsert = runner.calls.find((c) =>
+            c.sql.includes('cascade_posts'),
+        );
         expect(postInsert).toBeDefined();
         expect(JSON.stringify(postInsert!.params)).toContain('author-pk');
     });
@@ -120,11 +163,14 @@ describe('cascade save — @ManyToOne', () => {
         const runner = makeRunner();
         const repo = makeRepo(CPost, runner);
 
-        const post = Object.assign(new CPost(), { title: 'No Author', authorId: 'existing-id' });
+        const post = Object.assign(new CPost(), {
+            title: 'No Author',
+            authorId: 'existing-id',
+        });
         await repo.save(post);
 
-        const sqls = runner.calls.map(c => c.sql);
-        expect(sqls.every(s => !s.includes('cascade_authors'))).toBe(true);
+        const sqls = runner.calls.map((c) => c.sql);
+        expect(sqls.every((s) => !s.includes('cascade_authors'))).toBe(true);
     });
 
     it('does not cascade if cascade option not set', async () => {
@@ -137,7 +183,11 @@ describe('cascade save — @ManyToOne', () => {
         }
         const runner = makeRunner();
         const meta = registry.getEntity('NoCascadePost')!;
-        const repo = new Repository(NoCascadePost, runner as unknown as import('../interfaces/query-runner').IQueryRunner, meta);
+        const repo = new Repository(
+            NoCascadePost,
+            runner as unknown as import('../interfaces/query-runner').IQueryRunner,
+            meta,
+        );
 
         const post = Object.assign(new NoCascadePost(), {
             title: 'Test',
@@ -145,8 +195,8 @@ describe('cascade save — @ManyToOne', () => {
         });
         await repo.save(post);
 
-        const sqls = runner.calls.map(c => c.sql);
-        expect(sqls.every(s => !s.includes('cascade_authors'))).toBe(true);
+        const sqls = runner.calls.map((c) => c.sql);
+        expect(sqls.every((s) => !s.includes('cascade_authors'))).toBe(true);
     });
 });
 
@@ -159,13 +209,16 @@ describe('cascade save — @OneToMany', () => {
 
         const p1 = Object.assign(new CPost(), { title: 'Post 1' });
         const p2 = Object.assign(new CPost(), { title: 'Post 2' });
-        const author = Object.assign(new CAuthor(), { name: 'Martin', posts: [p1, p2] });
+        const author = Object.assign(new CAuthor(), {
+            name: 'Martin',
+            posts: [p1, p2],
+        });
 
         await repo.save(author);
 
-        const sqls = runner.calls.map(c => c.sql);
-        const authorIdx = sqls.findIndex(s => s.includes('cascade_authors'));
-        const postsIdx = sqls.findIndex(s => s.includes('cascade_posts'));
+        const sqls = runner.calls.map((c) => c.sql);
+        const authorIdx = sqls.findIndex((s) => s.includes('cascade_authors'));
+        const postsIdx = sqls.findIndex((s) => s.includes('cascade_posts'));
         expect(authorIdx).toBeGreaterThanOrEqual(0);
         expect(postsIdx).toBeGreaterThan(authorIdx);
         expect(sqls[postsIdx]).toContain('VALUES');
@@ -173,15 +226,29 @@ describe('cascade save — @OneToMany', () => {
 
     it('injects parent FK into each new child before saving', async () => {
         const runner = makeRunner();
-        runner.queueOnce([{ id: 'author-pk', name: 'Martin', author_id: null, user_id: null, title: 'x', bio: 'x' }]);
+        runner.queueOnce([
+            {
+                id: 'author-pk',
+                name: 'Martin',
+                author_id: null,
+                user_id: null,
+                title: 'x',
+                bio: 'x',
+            },
+        ]);
 
         const repo = makeRepo(CAuthor, runner);
         const p1 = Object.assign(new CPost(), { title: 'Post 1' });
-        const author = Object.assign(new CAuthor(), { name: 'Martin', posts: [p1] });
+        const author = Object.assign(new CAuthor(), {
+            name: 'Martin',
+            posts: [p1],
+        });
 
         await repo.save(author);
 
-        const postInsert = runner.calls.find(c => c.sql.includes('cascade_posts'));
+        const postInsert = runner.calls.find((c) =>
+            c.sql.includes('cascade_posts'),
+        );
         expect(JSON.stringify(postInsert!.params)).toContain('author-pk');
     });
 
@@ -189,13 +256,22 @@ describe('cascade save — @OneToMany', () => {
         const runner = makeRunner();
         const repo = makeRepo(CAuthor, runner);
 
-        const existing = Object.assign(new CPost(), { id: 'existing-id', title: 'Old Post', authorId: 'some-author' });
-        const author = Object.assign(new CAuthor(), { name: 'Martin', posts: [existing] });
+        const existing = Object.assign(new CPost(), {
+            id: 'existing-id',
+            title: 'Old Post',
+            authorId: 'some-author',
+        });
+        const author = Object.assign(new CAuthor(), {
+            name: 'Martin',
+            posts: [existing],
+        });
 
         await repo.save(author);
 
-        const sqls = runner.calls.map(c => c.sql);
-        const postUpdate = sqls.find(s => s.includes('cascade_posts') && s.includes('UPDATE'));
+        const sqls = runner.calls.map((c) => c.sql);
+        const postUpdate = sqls.find(
+            (s) => s.includes('cascade_posts') && s.includes('UPDATE'),
+        );
         expect(postUpdate).toBeDefined();
     });
 
@@ -206,8 +282,8 @@ describe('cascade save — @OneToMany', () => {
         const author = Object.assign(new CAuthor(), { name: 'Martin' });
         await repo.save(author);
 
-        const sqls = runner.calls.map(c => c.sql);
-        expect(sqls.every(s => !s.includes('cascade_posts'))).toBe(true);
+        const sqls = runner.calls.map((c) => c.sql);
+        expect(sqls.every((s) => !s.includes('cascade_posts'))).toBe(true);
     });
 });
 
@@ -216,7 +292,17 @@ describe('cascade save — @OneToMany', () => {
 describe('cascade save — @OneToOne inverse', () => {
     it('saves inverse relation after main entity and injects FK', async () => {
         const runner = makeRunner();
-        runner.queueOnce([{ id: 'user-pk', name: 'Emanuel', profile: null, user_id: null, author_id: null, title: 'x', bio: 'x' }]);
+        runner.queueOnce([
+            {
+                id: 'user-pk',
+                name: 'Emanuel',
+                profile: null,
+                user_id: null,
+                author_id: null,
+                title: 'x',
+                bio: 'x',
+            },
+        ]);
 
         const repo = makeRepo(CUser, runner);
         const profile = Object.assign(new CProfile(), { bio: 'Dev' });
@@ -224,9 +310,11 @@ describe('cascade save — @OneToOne inverse', () => {
 
         await repo.save(user);
 
-        const sqls = runner.calls.map(c => c.sql);
-        const userIdx = sqls.findIndex(s => s.includes('cascade_users'));
-        const profileIdx = sqls.findIndex(s => s.includes('cascade_profiles'));
+        const sqls = runner.calls.map((c) => c.sql);
+        const userIdx = sqls.findIndex((s) => s.includes('cascade_users'));
+        const profileIdx = sqls.findIndex((s) =>
+            s.includes('cascade_profiles'),
+        );
         expect(userIdx).toBeGreaterThanOrEqual(0);
         expect(profileIdx).toBeGreaterThan(userIdx);
     });
@@ -239,12 +327,19 @@ describe('cascade remove — @OneToMany', () => {
         const runner = makeRunner();
         const repo = makeRepo(CAuthor, runner);
 
-        const author = Object.assign(new CAuthor(), { id: 'author-pk', name: 'Martin' });
+        const author = Object.assign(new CAuthor(), {
+            id: 'author-pk',
+            name: 'Martin',
+        });
         await repo.remove(author);
 
-        const sqls = runner.calls.map(c => c.sql);
-        const childDeleteIdx = sqls.findIndex(s => s.includes('cascade_posts') && s.includes('DELETE'));
-        const parentDeleteIdx = sqls.findIndex(s => s.includes('cascade_authors') && s.includes('DELETE'));
+        const sqls = runner.calls.map((c) => c.sql);
+        const childDeleteIdx = sqls.findIndex(
+            (s) => s.includes('cascade_posts') && s.includes('DELETE'),
+        );
+        const parentDeleteIdx = sqls.findIndex(
+            (s) => s.includes('cascade_authors') && s.includes('DELETE'),
+        );
         expect(childDeleteIdx).toBeGreaterThanOrEqual(0);
         expect(parentDeleteIdx).toBeGreaterThan(childDeleteIdx);
     });
@@ -253,10 +348,15 @@ describe('cascade remove — @OneToMany', () => {
         const runner = makeRunner();
         const repo = makeRepo(CAuthor, runner);
 
-        const author = Object.assign(new CAuthor(), { id: 'author-pk', name: 'Martin' });
+        const author = Object.assign(new CAuthor(), {
+            id: 'author-pk',
+            name: 'Martin',
+        });
         await repo.remove(author);
 
-        const childDelete = runner.calls.find(c => c.sql.includes('cascade_posts') && c.sql.includes('DELETE'));
+        const childDelete = runner.calls.find(
+            (c) => c.sql.includes('cascade_posts') && c.sql.includes('DELETE'),
+        );
         expect(childDelete!.params).toContain('author-pk');
     });
 });

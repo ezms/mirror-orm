@@ -1,4 +1,8 @@
-export type RelationType = 'many-to-one' | 'one-to-many' | 'one-to-one' | 'many-to-many';
+export type RelationType =
+    | 'many-to-one'
+    | 'one-to-many'
+    | 'one-to-one'
+    | 'many-to-many';
 export type CascadeType = 'insert' | 'update' | 'remove';
 
 export interface IRelationMetadata {

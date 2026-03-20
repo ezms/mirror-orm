@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { AfterLoad, BeforeInsert, BeforeUpdate, Column, Entity, PrimaryColumn } from '../index';
+import {
+    AfterLoad,
+    BeforeInsert,
+    BeforeUpdate,
+    Column,
+    Entity,
+    PrimaryColumn,
+} from '../index';
 import { Repository } from '../repository/repository';
 import { registry } from '../metadata/registry';
 import { IQueryRunner } from '../interfaces/query-runner';
@@ -21,13 +28,19 @@ class HkUser {
     name!: string;
 
     @BeforeInsert()
-    onBeforeInsert() { insertTracker(); }
+    onBeforeInsert() {
+        insertTracker();
+    }
 
     @BeforeUpdate()
-    onBeforeUpdate() { updateTracker(); }
+    onBeforeUpdate() {
+        updateTracker();
+    }
 
     @AfterLoad()
-    onAfterLoad() { loadTracker(); }
+    onAfterLoad() {
+        loadTracker();
+    }
 }
 
 // ─── Mock runner ──────────────────────────────────────────────────────────────
@@ -43,7 +56,9 @@ function makeRunner() {
             return queue.length > 0 ? queue.shift()! : defaultRow;
         },
         calls,
-        queueOnce: (...rows: unknown[][]) => { queue.push(...rows); },
+        queueOnce: (...rows: unknown[][]) => {
+            queue.push(...rows);
+        },
     };
     return runner;
 }
@@ -56,7 +71,10 @@ function makeRepo(runner: ReturnType<typeof makeRunner>) {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('@BeforeInsert', () => {
-    beforeEach(() => { insertTracker.mockClear(); updateTracker.mockClear(); });
+    beforeEach(() => {
+        insertTracker.mockClear();
+        updateTracker.mockClear();
+    });
 
     it('is called before INSERT', async () => {
         const runner = makeRunner();
@@ -69,19 +87,28 @@ describe('@BeforeInsert', () => {
     it('is not called on UPDATE', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
-        const user = Object.assign(new HkUser(), { id: 'existing', name: 'Alice' });
+        const user = Object.assign(new HkUser(), {
+            id: 'existing',
+            name: 'Alice',
+        });
         await repo.save(user);
         expect(insertTracker).not.toHaveBeenCalled();
     });
 });
 
 describe('@BeforeUpdate', () => {
-    beforeEach(() => { insertTracker.mockClear(); updateTracker.mockClear(); });
+    beforeEach(() => {
+        insertTracker.mockClear();
+        updateTracker.mockClear();
+    });
 
     it('is called before UPDATE', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
-        const user = Object.assign(new HkUser(), { id: 'existing', name: 'Alice' });
+        const user = Object.assign(new HkUser(), {
+            id: 'existing',
+            name: 'Alice',
+        });
         await repo.save(user);
         expect(updateTracker).toHaveBeenCalledOnce();
     });
@@ -96,11 +123,16 @@ describe('@BeforeUpdate', () => {
 });
 
 describe('@AfterLoad', () => {
-    beforeEach(() => { loadTracker.mockClear(); });
+    beforeEach(() => {
+        loadTracker.mockClear();
+    });
 
     it('is called after findAll', async () => {
         const runner = makeRunner();
-        runner.queueOnce([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
+        runner.queueOnce([
+            { id: 'u1', name: 'Alice' },
+            { id: 'u2', name: 'Bob' },
+        ]);
         const repo = makeRepo(runner);
         await repo.findAll();
         expect(loadTracker).toHaveBeenCalledTimes(2);
@@ -116,7 +148,10 @@ describe('@AfterLoad', () => {
 
     it('is called after find', async () => {
         const runner = makeRunner();
-        runner.queueOnce([{ id: 'u1', name: 'Alice' }, { id: 'u2', name: 'Bob' }]);
+        runner.queueOnce([
+            { id: 'u1', name: 'Alice' },
+            { id: 'u2', name: 'Bob' },
+        ]);
         const repo = makeRepo(runner);
         await repo.find({});
         expect(loadTracker).toHaveBeenCalledTimes(2);
@@ -152,9 +187,16 @@ describe('async hooks', () => {
 
         const runner = makeRunner();
         const meta = registry.getEntity('HkAsync')!;
-        const repo = new Repository(HkAsync, runner as unknown as IQueryRunner, meta);
+        const repo = new Repository(
+            HkAsync,
+            runner as unknown as IQueryRunner,
+            meta,
+        );
         const original = runner.query.bind(runner);
-        runner.query = async (sql: string | { text: string }, params?: unknown[]) => {
+        runner.query = async (
+            sql: string | { text: string },
+            params?: unknown[],
+        ) => {
             const text = typeof sql === 'string' ? sql : sql.text;
             if (text.includes('INSERT')) order.push('query');
             return original(sql, params);

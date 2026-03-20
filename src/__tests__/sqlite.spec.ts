@@ -36,8 +36,12 @@ describe('SQLite adapter (in-memory)', () => {
 
     beforeEach(async () => {
         conn = await Connection.sqlite({ database: ':memory:' });
-        await conn.query(`CREATE TABLE sq_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT)`);
-        await conn.query(`CREATE TABLE sq_products (id TEXT PRIMARY KEY, title TEXT NOT NULL)`);
+        await conn.query(
+            `CREATE TABLE sq_users (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, email TEXT)`,
+        );
+        await conn.query(
+            `CREATE TABLE sq_products (id TEXT PRIMARY KEY, title TEXT NOT NULL)`,
+        );
         userRepo = conn.getRepository(SqUser);
         productRepo = conn.getRepository(SqProduct);
     });
@@ -94,7 +98,9 @@ describe('SQLite adapter (in-memory)', () => {
 
     describe('findAll / findById', () => {
         it('returns all inserted rows', async () => {
-            await conn.query(`INSERT INTO sq_users (name, email) VALUES ('Alice', 'a@test.com'), ('Bob', NULL)`);
+            await conn.query(
+                `INSERT INTO sq_users (name, email) VALUES ('Alice', 'a@test.com'), ('Bob', NULL)`,
+            );
 
             const all = await userRepo.findAll();
 
@@ -103,7 +109,9 @@ describe('SQLite adapter (in-memory)', () => {
         });
 
         it('findById returns correct entity', async () => {
-            await conn.query(`INSERT INTO sq_users (name, email) VALUES ('Carol', 'c@test.com')`);
+            await conn.query(
+                `INSERT INTO sq_users (name, email) VALUES ('Carol', 'c@test.com')`,
+            );
 
             const found = await userRepo.findById(1);
 
@@ -120,7 +128,9 @@ describe('SQLite adapter (in-memory)', () => {
 
     describe('find (where)', () => {
         it('filters by exact column value', async () => {
-            await conn.query(`INSERT INTO sq_users (name, email) VALUES ('Alice', 'a@x.com'), ('Bob', 'b@x.com')`);
+            await conn.query(
+                `INSERT INTO sq_users (name, email) VALUES ('Alice', 'a@x.com'), ('Bob', 'b@x.com')`,
+            );
 
             const result = await userRepo.find({ where: { name: 'Alice' } });
 
@@ -147,8 +157,14 @@ describe('SQLite adapter (in-memory)', () => {
 
     describe('saveMany / removeMany', () => {
         it('inserts multiple entities', async () => {
-            const a = Object.assign(new SqUser(), { name: 'A', email: 'a@x.com' });
-            const b = Object.assign(new SqUser(), { name: 'B', email: 'b@x.com' });
+            const a = Object.assign(new SqUser(), {
+                name: 'A',
+                email: 'a@x.com',
+            });
+            const b = Object.assign(new SqUser(), {
+                name: 'B',
+                email: 'b@x.com',
+            });
 
             const saved = await userRepo.saveMany([a, b]);
 
@@ -158,8 +174,12 @@ describe('SQLite adapter (in-memory)', () => {
         });
 
         it('removes multiple entities by PK', async () => {
-            const a = await userRepo.save(Object.assign(new SqUser(), { name: 'A' }));
-            const b = await userRepo.save(Object.assign(new SqUser(), { name: 'B' }));
+            const a = await userRepo.save(
+                Object.assign(new SqUser(), { name: 'A' }),
+            );
+            const b = await userRepo.save(
+                Object.assign(new SqUser(), { name: 'B' }),
+            );
 
             await userRepo.removeMany([a, b]);
 
@@ -171,7 +191,7 @@ describe('SQLite adapter (in-memory)', () => {
 
     describe('transaction', () => {
         it('commits changes inside a transaction', async () => {
-            await conn.transaction(async trx => {
+            await conn.transaction(async (trx) => {
                 const repo = trx.getRepository(SqUser);
                 const u = Object.assign(new SqUser(), { name: 'Trx User' });
                 await repo.save(u);
@@ -182,9 +202,11 @@ describe('SQLite adapter (in-memory)', () => {
 
         it('rolls back on error', async () => {
             await expect(
-                conn.transaction(async trx => {
+                conn.transaction(async (trx) => {
                     const repo = trx.getRepository(SqUser);
-                    await repo.save(Object.assign(new SqUser(), { name: 'Rollback' }));
+                    await repo.save(
+                        Object.assign(new SqUser(), { name: 'Rollback' }),
+                    );
                     throw new Error('force rollback');
                 }),
             ).rejects.toThrow('force rollback');
@@ -197,7 +219,9 @@ describe('SQLite adapter (in-memory)', () => {
 
     describe('queryStream', () => {
         it('streams all rows via findStream', async () => {
-            await conn.query(`INSERT INTO sq_users (name, email) VALUES ('S1', NULL), ('S2', NULL), ('S3', NULL)`);
+            await conn.query(
+                `INSERT INTO sq_users (name, email) VALUES ('S1', NULL), ('S2', NULL), ('S3', NULL)`,
+            );
 
             const rows: SqUser[] = [];
             for await (const user of userRepo.findStream()) {

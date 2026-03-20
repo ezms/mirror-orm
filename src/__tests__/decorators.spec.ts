@@ -16,36 +16,36 @@ describe('@Entity / @Column / @PrimaryColumn', () => {
 
     it('maps column with explicit name to correct databaseName', () => {
         const metadata = registry.getEntity('UserFixture')!;
-        const col = metadata.columns.find(c => c.propertyKey === 'name');
+        const col = metadata.columns.find((c) => c.propertyKey === 'name');
         expect(col).toBeDefined();
         expect(col!.databaseName).toBe('name');
     });
 
     it('defaults databaseName to propertyKey when no name is given', () => {
         const metadata = registry.getEntity('UserFixture')!;
-        const col = metadata.columns.find(c => c.propertyKey === 'email');
+        const col = metadata.columns.find((c) => c.propertyKey === 'email');
         expect(col).toBeDefined();
         expect(col!.databaseName).toBe('email');
     });
 
     it('marks @PrimaryColumn as primary = true', () => {
         const metadata = registry.getEntity('UserFixture')!;
-        const pk = metadata.columns.find(c => c.primary);
+        const pk = metadata.columns.find((c) => c.primary);
         expect(pk).toBeDefined();
         expect(pk!.propertyKey).toBe('id');
     });
 
     it('stores generation strategy on primary column', () => {
         const metadata = registry.getEntity('UserFixture')!;
-        const pk = metadata.columns.find(c => c.primary)!;
+        const pk = metadata.columns.find((c) => c.primary)!;
         expect(pk.generation?.strategy).toBe('identity');
     });
 
     it('marks regular columns as primary = false', () => {
         const metadata = registry.getEntity('UserFixture')!;
-        const nonPrimary = metadata.columns.filter(c => !c.primary);
+        const nonPrimary = metadata.columns.filter((c) => !c.primary);
         expect(nonPrimary.length).toBeGreaterThan(0);
-        nonPrimary.forEach(c => expect(c.primary).toBe(false));
+        nonPrimary.forEach((c) => expect(c.primary).toBe(false));
     });
 
     it('registers multiple entities independently', () => {
@@ -62,7 +62,7 @@ describe('@Entity / @Column / @PrimaryColumn', () => {
 
     it('stores uuid_v4 strategy on PostFixture primary column', () => {
         const metadata = registry.getEntity('PostFixture')!;
-        const pk = metadata.columns.find(c => c.primary)!;
+        const pk = metadata.columns.find((c) => c.primary)!;
         expect(pk.generation?.strategy).toBe('uuid_v4');
     });
 });
@@ -72,7 +72,11 @@ describe('@Entity / @Column / @PrimaryColumn', () => {
 describe('registry.registerStiChild', () => {
     it('silently returns when parent is not registered', () => {
         // Should not throw
-        expect(() => (registry as unknown as Record<string, unknown>)['registerStiChild']?.('__unknown__', 'x', class {})).not.toThrow();
+        expect(() =>
+            (registry as unknown as Record<string, unknown>)[
+                'registerStiChild'
+            ]?.('__unknown__', 'x', class {}),
+        ).not.toThrow();
     });
 
     it('reuses existing stiChildren map on second call', () => {
@@ -107,7 +111,7 @@ describe('@PrimaryColumn edge cases', () => {
         }
         void PcNoOpts;
         const meta = registry.getEntity('PcNoOpts')!;
-        const pk = meta.columns.find(c => c.primary)!;
+        const pk = meta.columns.find((c) => c.primary)!;
         expect(pk.generation).toBeUndefined();
     });
 
@@ -119,7 +123,7 @@ describe('@PrimaryColumn edge cases', () => {
         }
         void PcNamed;
         const meta = registry.getEntity('PcNamed')!;
-        const pk = meta.columns.find(c => c.primary)!;
+        const pk = meta.columns.find((c) => c.primary)!;
         expect(pk.databaseName).toBe('my_id');
     });
 });

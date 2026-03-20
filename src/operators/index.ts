@@ -1,7 +1,19 @@
 export { IQueryOperator, isOperator } from './query-operator';
-export { MoreThan, MoreThanOrEqual, LessThan, LessThanOrEqual, Not, Between } from './comparison';
+export {
+    MoreThan,
+    MoreThanOrEqual,
+    LessThan,
+    LessThanOrEqual,
+    Not,
+    Between,
+} from './comparison';
 export { Like, ILike } from './string';
 export { In } from './array';
 export { IsNull, IsNotNull } from './null';
 export { Raw } from './raw';
-export { JsonContains, JsonHasKey, JsonHasAllKeys, JsonHasAnyKey } from './json';
+export {
+    JsonContains,
+    JsonHasKey,
+    JsonHasAllKeys,
+    JsonHasAnyKey,
+} from './json';

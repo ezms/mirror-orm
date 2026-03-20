@@ -18,15 +18,23 @@ class RrItem {
 
 void RrItem;
 
-function makeRunner(rows: Array<Record<string, unknown>> = []): IQueryRunner & { calls: string[] } {
+function makeRunner(
+    rows: Array<Record<string, unknown>> = [],
+): IQueryRunner & { calls: string[] } {
     const calls: string[] = [];
     return {
         calls,
-        query: vi.fn(async () => { calls.push('query'); return rows; }),
+        query: vi.fn(async () => {
+            calls.push('query');
+            return rows;
+        }),
     };
 }
 
-function makeRepo(primaryRows: Record<string, unknown>[], replicaRows: Record<string, unknown>[]) {
+function makeRepo(
+    primaryRows: Record<string, unknown>[],
+    replicaRows: Record<string, unknown>[],
+) {
     const meta = registry.getEntity('RrItem')!;
     const state = new RepositoryState(RrItem, meta, new PostgresDialect());
     const primary = makeRunner(primaryRows);

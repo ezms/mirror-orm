@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { RepositoryState } from '../repository/repository-state';
-import { buildRelationTree, loadRelationsForEntities } from '../repository/relation-loader';
+import {
+    buildRelationTree,
+    loadRelationsForEntities,
+} from '../repository/relation-loader';
 import { registry } from '../metadata/registry';
 import {
     AuthorFixture,
@@ -52,9 +55,11 @@ describe('buildRelationTree', () => {
 
 // ─── loadRelationsForEntities — helpers ──────────────────────────────────────
 
-const makeRunner = (responses: unknown[][] = []): { runner: IQueryRunner; mockQuery: Mock } => {
+const makeRunner = (
+    responses: unknown[][] = [],
+): { runner: IQueryRunner; mockQuery: Mock } => {
     const mockQuery = vi.fn();
-    responses.forEach(r => mockQuery.mockResolvedValueOnce(r));
+    responses.forEach((r) => mockQuery.mockResolvedValueOnce(r));
     return { runner: { query: mockQuery }, mockQuery };
 };
 
@@ -67,7 +72,11 @@ describe('loadRelationsForEntities — owner side (ManyToOne)', () => {
     it('sets relation to null and skips query when all FK values are null', async () => {
         const { runner, mockQuery } = makeRunner();
         const state = stateFor(BookFixture);
-        const book = Object.assign(new BookFixture(), { id: 1, title: 'B', authorId: null });
+        const book = Object.assign(new BookFixture(), {
+            id: 1,
+            title: 'B',
+            authorId: null,
+        });
 
         await loadRelationsForEntities([book], state, ['author'], runner);
 
@@ -79,12 +88,19 @@ describe('loadRelationsForEntities — owner side (ManyToOne)', () => {
         const authorRow = { id: 1, name: 'Martin' };
         const { runner, mockQuery } = makeRunner([[authorRow]]);
         const state = stateFor(BookFixture);
-        const book = Object.assign(new BookFixture(), { id: 10, title: 'CC', authorId: 1 });
+        const book = Object.assign(new BookFixture(), {
+            id: 10,
+            title: 'CC',
+            authorId: 1,
+        });
 
         await loadRelationsForEntities([book], state, ['author'], runner);
 
         expect(mockQuery).toHaveBeenCalledOnce();
-        expect((book as Record<string, unknown>)['author']).toMatchObject({ id: 1, name: 'Martin' });
+        expect((book as Record<string, unknown>)['author']).toMatchObject({
+            id: 1,
+            name: 'Martin',
+        });
     });
 
     it('deduplicates FK values when multiple entities share the same FK', async () => {
@@ -114,7 +130,10 @@ describe('loadRelationsForEntities — inverse side (OneToMany)', () => {
         ];
         const { runner } = makeRunner([bookRows]);
         const state = stateFor(AuthorFixture);
-        const author = Object.assign(new AuthorFixture(), { id: 1, name: 'Martin' });
+        const author = Object.assign(new AuthorFixture(), {
+            id: 1,
+            name: 'Martin',
+        });
 
         await loadRelationsForEntities([author], state, ['books'], runner);
 
@@ -125,7 +144,10 @@ describe('loadRelationsForEntities — inverse side (OneToMany)', () => {
     it('assigns empty array when no matching children', async () => {
         const { runner } = makeRunner([[]]);
         const state = stateFor(AuthorFixture);
-        const author = Object.assign(new AuthorFixture(), { id: 99, name: 'Nobody' });
+        const author = Object.assign(new AuthorFixture(), {
+            id: 99,
+            name: 'Nobody',
+        });
 
         await loadRelationsForEntities([author], state, ['books'], runner);
 
@@ -140,7 +162,10 @@ describe('loadRelationsForEntities — inverse side (OneToOne)', () => {
         const profileRow = { id: 5, bio: 'Hello', person_id: 1 };
         const { runner } = makeRunner([[profileRow]]);
         const state = stateFor(PersonFixture);
-        const person = Object.assign(new PersonFixture(), { id: 1, name: 'Alice' });
+        const person = Object.assign(new PersonFixture(), {
+            id: 1,
+            name: 'Alice',
+        });
 
         await loadRelationsForEntities([person], state, ['profile'], runner);
 
@@ -151,7 +176,10 @@ describe('loadRelationsForEntities — inverse side (OneToOne)', () => {
     it('assigns null when no matching one-to-one child', async () => {
         const { runner } = makeRunner([[]]);
         const state = stateFor(PersonFixture);
-        const person = Object.assign(new PersonFixture(), { id: 99, name: 'Nobody' });
+        const person = Object.assign(new PersonFixture(), {
+            id: 99,
+            name: 'Nobody',
+        });
 
         await loadRelationsForEntities([person], state, ['profile'], runner);
 
@@ -165,11 +193,14 @@ describe('loadRelationsForEntities — many-to-many', () => {
     it('groups tags and assigns arrays to articles', async () => {
         const tagRows = [
             { id: 1, name: 'TypeScript', _mirror_mtm_fk_: 10 },
-            { id: 2, name: 'Node.js',    _mirror_mtm_fk_: 10 },
+            { id: 2, name: 'Node.js', _mirror_mtm_fk_: 10 },
         ];
         const { runner } = makeRunner([tagRows]);
         const state = stateFor(ArticleFixture);
-        const article = Object.assign(new ArticleFixture(), { id: 10, title: 'TS Guide' });
+        const article = Object.assign(new ArticleFixture(), {
+            id: 10,
+            title: 'TS Guide',
+        });
 
         await loadRelationsForEntities([article], state, ['tags'], runner);
 
@@ -179,7 +210,10 @@ describe('loadRelationsForEntities — many-to-many', () => {
     it('assigns empty array when join returns no rows', async () => {
         const { runner } = makeRunner([[]]);
         const state = stateFor(ArticleFixture);
-        const article = Object.assign(new ArticleFixture(), { id: 99, title: 'Orphan' });
+        const article = Object.assign(new ArticleFixture(), {
+            id: 99,
+            title: 'Orphan',
+        });
 
         await loadRelationsForEntities([article], state, ['tags'], runner);
 
@@ -193,21 +227,37 @@ describe('loadRelationsForEntities — edge cases', () => {
     it('skips unknown relation keys silently', async () => {
         const { runner, mockQuery } = makeRunner();
         const state = stateFor(AuthorFixture);
-        const author = Object.assign(new AuthorFixture(), { id: 1, name: 'Martin' });
+        const author = Object.assign(new AuthorFixture(), {
+            id: 1,
+            name: 'Martin',
+        });
 
-        await loadRelationsForEntities([author], state, ['nonExistent'], runner);
+        await loadRelationsForEntities(
+            [author],
+            state,
+            ['nonExistent'],
+            runner,
+        );
 
         expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('recursively loads sub-relations when childRelations is non-empty', async () => {
-        const bookRow    = { id: 10, title: 'CC', author_id: 1 };
-        const authorRow  = { id: 1, name: 'Martin' };
+        const bookRow = { id: 10, title: 'CC', author_id: 1 };
+        const authorRow = { id: 1, name: 'Martin' };
         const { runner, mockQuery } = makeRunner([[bookRow], [authorRow]]);
         const state = stateFor(AuthorFixture);
-        const author = Object.assign(new AuthorFixture(), { id: 1, name: 'Martin' });
+        const author = Object.assign(new AuthorFixture(), {
+            id: 1,
+            name: 'Martin',
+        });
 
-        await loadRelationsForEntities([author], state, ['books', 'books.author'], runner);
+        await loadRelationsForEntities(
+            [author],
+            state,
+            ['books', 'books.author'],
+            runner,
+        );
 
         expect(mockQuery).toHaveBeenCalledTimes(2);
         expect(author.books[0].author).toMatchObject({ name: 'Martin' });

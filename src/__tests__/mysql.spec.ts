@@ -46,8 +46,12 @@ describe('MySQL adapter', () => {
         conn = await Connection.mysql(DB_CONFIG);
         await conn.query(`DROP TABLE IF EXISTS my_users`);
         await conn.query(`DROP TABLE IF EXISTS my_products`);
-        await conn.query(`CREATE TABLE my_users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255))`);
-        await conn.query(`CREATE TABLE my_products (id VARCHAR(36) PRIMARY KEY, title VARCHAR(255) NOT NULL)`);
+        await conn.query(
+            `CREATE TABLE my_users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) NOT NULL, email VARCHAR(255))`,
+        );
+        await conn.query(
+            `CREATE TABLE my_products (id VARCHAR(36) PRIMARY KEY, title VARCHAR(255) NOT NULL)`,
+        );
         userRepo = conn.getRepository(MyUser);
         productRepo = conn.getRepository(MyProduct);
     });
@@ -62,7 +66,10 @@ describe('MySQL adapter', () => {
 
     describe('save (identity PK)', () => {
         it('inserts and returns hydrated entity with auto-generated id', async () => {
-            const user = Object.assign(new MyUser(), { name: 'Alice', email: 'alice@test.com' });
+            const user = Object.assign(new MyUser(), {
+                name: 'Alice',
+                email: 'alice@test.com',
+            });
             const saved = await userRepo.save(user);
 
             expect(saved).toBeInstanceOf(MyUser);
@@ -72,7 +79,9 @@ describe('MySQL adapter', () => {
         });
 
         it('updates existing entity', async () => {
-            const user = await userRepo.save(Object.assign(new MyUser(), { name: 'Bob' }));
+            const user = await userRepo.save(
+                Object.assign(new MyUser(), { name: 'Bob' }),
+            );
             user.name = 'Bob Updated';
             const updated = await userRepo.save(user);
 
@@ -85,7 +94,9 @@ describe('MySQL adapter', () => {
 
     describe('save (uuid PK)', () => {
         it('inserts and returns hydrated entity with generated uuid', async () => {
-            const product = Object.assign(new MyProduct(), { title: 'Mirror Book' });
+            const product = Object.assign(new MyProduct(), {
+                title: 'Mirror Book',
+            });
             const saved = await productRepo.save(product);
 
             expect(saved).toBeInstanceOf(MyProduct);
@@ -104,7 +115,12 @@ describe('MySQL adapter', () => {
         });
 
         it('findById returns correct entity', async () => {
-            const inserted = await userRepo.save(Object.assign(new MyUser(), { name: 'Carol', email: 'c@test.com' }));
+            const inserted = await userRepo.save(
+                Object.assign(new MyUser(), {
+                    name: 'Carol',
+                    email: 'c@test.com',
+                }),
+            );
             const found = await userRepo.findById(inserted.id);
 
             expect(found).toBeInstanceOf(MyUser);
@@ -120,7 +136,12 @@ describe('MySQL adapter', () => {
 
     describe('find (where)', () => {
         it('filters by exact column value', async () => {
-            await userRepo.save(Object.assign(new MyUser(), { name: 'FilterMe', email: 'f@x.com' }));
+            await userRepo.save(
+                Object.assign(new MyUser(), {
+                    name: 'FilterMe',
+                    email: 'f@x.com',
+                }),
+            );
             const result = await userRepo.find({ where: { name: 'FilterMe' } });
 
             expect(result.length).toBeGreaterThanOrEqual(1);
@@ -132,7 +153,9 @@ describe('MySQL adapter', () => {
 
     describe('remove', () => {
         it('deletes an entity by PK', async () => {
-            const user = await userRepo.save(Object.assign(new MyUser(), { name: 'Delete Me' }));
+            const user = await userRepo.save(
+                Object.assign(new MyUser(), { name: 'Delete Me' }),
+            );
             await userRepo.remove(user);
 
             expect(await userRepo.findById(user.id)).toBeNull();
@@ -153,8 +176,12 @@ describe('MySQL adapter', () => {
         });
 
         it('removes multiple entities by PK', async () => {
-            const a = await userRepo.save(Object.assign(new MyUser(), { name: 'RM A' }));
-            const b = await userRepo.save(Object.assign(new MyUser(), { name: 'RM B' }));
+            const a = await userRepo.save(
+                Object.assign(new MyUser(), { name: 'RM A' }),
+            );
+            const b = await userRepo.save(
+                Object.assign(new MyUser(), { name: 'RM B' }),
+            );
             const before = await userRepo.findAll();
 
             await userRepo.removeMany([a, b]);
@@ -170,9 +197,11 @@ describe('MySQL adapter', () => {
         it('commits changes inside a transaction', async () => {
             const before = await userRepo.findAll();
 
-            await conn.transaction(async trx => {
+            await conn.transaction(async (trx) => {
                 const repo = trx.getRepository(MyUser);
-                await repo.save(Object.assign(new MyUser(), { name: 'Trx User' }));
+                await repo.save(
+                    Object.assign(new MyUser(), { name: 'Trx User' }),
+                );
             });
 
             const after = await userRepo.findAll();
@@ -183,9 +212,11 @@ describe('MySQL adapter', () => {
             const before = await userRepo.findAll();
 
             await expect(
-                conn.transaction(async trx => {
+                conn.transaction(async (trx) => {
                     const repo = trx.getRepository(MyUser);
-                    await repo.save(Object.assign(new MyUser(), { name: 'Rollback' }));
+                    await repo.save(
+                        Object.assign(new MyUser(), { name: 'Rollback' }),
+                    );
                     throw new Error('force rollback');
                 }),
             ).rejects.toThrow('force rollback');

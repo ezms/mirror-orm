@@ -58,7 +58,16 @@ class FkUser {
 
 function makeRunner() {
     const calls: Array<{ sql: string; params: unknown[] }> = [];
-    const defaultRow = [{ id: 'gen-id', name: 'x', title: 'x', bio: 'x', author_id: null, user_id: null }];
+    const defaultRow = [
+        {
+            id: 'gen-id',
+            name: 'x',
+            title: 'x',
+            bio: 'x',
+            author_id: null,
+            user_id: null,
+        },
+    ];
     const runner = {
         query: async (sql: string, params?: unknown[]) => {
             const text = typeof sql === 'string' ? sql : (sql as any).text;
@@ -82,12 +91,18 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const runner = makeRunner();
         const repo = makeRepo(FkPost, runner);
 
-        const author = Object.assign(new FkAuthor(), { id: 'author-123', name: 'Martin' });
-        const post = Object.assign(new FkPost(), { title: 'Clean Code', author });
+        const author = Object.assign(new FkAuthor(), {
+            id: 'author-123',
+            name: 'Martin',
+        });
+        const post = Object.assign(new FkPost(), {
+            title: 'Clean Code',
+            author,
+        });
 
         await repo.save(post);
 
-        const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
+        const insert = runner.calls.find((c) => c.sql.includes('fk_posts'));
         expect(JSON.stringify(insert!.params)).toContain('author-123');
     });
 
@@ -95,12 +110,19 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const runner = makeRunner();
         const repo = makeRepo(FkPost, runner);
 
-        const author = Object.assign(new FkAuthor(), { id: 'author-123', name: 'Martin' });
-        const post = Object.assign(new FkPost(), { title: 'Clean Code', author, authorId: 'manual-id' });
+        const author = Object.assign(new FkAuthor(), {
+            id: 'author-123',
+            name: 'Martin',
+        });
+        const post = Object.assign(new FkPost(), {
+            title: 'Clean Code',
+            author,
+            authorId: 'manual-id',
+        });
 
         await repo.save(post);
 
-        const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
+        const insert = runner.calls.find((c) => c.sql.includes('fk_posts'));
         expect(JSON.stringify(insert!.params)).toContain('author-123');
         expect(JSON.stringify(insert!.params)).not.toContain('manual-id');
     });
@@ -110,11 +132,14 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const repo = makeRepo(FkPost, runner);
 
         const author = Object.assign(new FkAuthor(), { name: 'Martin' });
-        const post = Object.assign(new FkPost(), { title: 'Clean Code', author });
+        const post = Object.assign(new FkPost(), {
+            title: 'Clean Code',
+            author,
+        });
 
         await repo.save(post);
 
-        const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
+        const insert = runner.calls.find((c) => c.sql.includes('fk_posts'));
         expect(insert).toBeDefined();
         expect(JSON.stringify(insert!.params)).not.toContain('author-123');
     });
@@ -123,13 +148,22 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const runner = makeRunner();
         const repo = makeRepo(FkPost, runner);
 
-        const post = Object.assign(new FkPost(), { id: 'post-1', title: 'Old', authorId: 'old-author' });
-        const newAuthor = Object.assign(new FkAuthor(), { id: 'new-author', name: 'New' });
+        const post = Object.assign(new FkPost(), {
+            id: 'post-1',
+            title: 'Old',
+            authorId: 'old-author',
+        });
+        const newAuthor = Object.assign(new FkAuthor(), {
+            id: 'new-author',
+            name: 'New',
+        });
         post.author = newAuthor;
 
         await repo.save(post);
 
-        const update = runner.calls.find(c => c.sql.includes('fk_posts') && c.sql.includes('UPDATE'));
+        const update = runner.calls.find(
+            (c) => c.sql.includes('fk_posts') && c.sql.includes('UPDATE'),
+        );
         expect(update).toBeDefined();
         expect(JSON.stringify(update!.params)).toContain('new-author');
     });
@@ -138,11 +172,14 @@ describe('Auto-FK Mapping — @ManyToOne', () => {
         const runner = makeRunner();
         const repo = makeRepo(FkPost, runner);
 
-        const post = Object.assign(new FkPost(), { title: 'Clean Code', authorId: 'existing-id' });
+        const post = Object.assign(new FkPost(), {
+            title: 'Clean Code',
+            authorId: 'existing-id',
+        });
 
         await repo.save(post);
 
-        const insert = runner.calls.find(c => c.sql.includes('fk_posts'));
+        const insert = runner.calls.find((c) => c.sql.includes('fk_posts'));
         expect(JSON.stringify(insert!.params)).toContain('existing-id');
     });
 });
@@ -152,12 +189,15 @@ describe('Auto-FK Mapping — @OneToOne owner', () => {
         const runner = makeRunner();
         const repo = makeRepo(FkUser, runner);
 
-        const profile = Object.assign(new FkProfile(), { id: 'profile-456', bio: 'Dev' });
+        const profile = Object.assign(new FkProfile(), {
+            id: 'profile-456',
+            bio: 'Dev',
+        });
         const user = Object.assign(new FkUser(), { name: 'Emanuel', profile });
 
         await repo.save(user);
 
-        const insert = runner.calls.find(c => c.sql.includes('fk_users'));
+        const insert = runner.calls.find((c) => c.sql.includes('fk_users'));
         expect(JSON.stringify(insert!.params)).toContain('profile-456');
     });
 });

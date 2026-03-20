@@ -2,9 +2,17 @@ import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IEmbedMetadata } from '../interfaces/entity-metadata';
 import { IRelationMetadata } from '../interfaces/relation-metadata';
 import { registry } from '../metadata/registry';
-import { COLUMNS_KEY, EMBEDS_KEY, HOOKS_KEY, RELATIONS_KEY } from '../metadata/symbols';
+import {
+    COLUMNS_KEY,
+    EMBEDS_KEY,
+    HOOKS_KEY,
+    RELATIONS_KEY,
+} from '../metadata/symbols';
 
-type EntityDecorator = <T extends new (...args: Array<any>) => any>(value: T, context: ClassDecoratorContext) => void;
+type EntityDecorator = <T extends new (...args: Array<any>) => any>(
+    value: T,
+    context: ClassDecoratorContext,
+) => void;
 
 export type EntityOptions = {
     tableName?: string;
@@ -13,36 +21,58 @@ export type EntityOptions = {
 };
 
 type EntityFactory = {
-    <T extends new (...args: Array<any>) => any>(value: T, context: ClassDecoratorContext): void;
+    <T extends new (...args: Array<any>) => any>(
+        value: T,
+        context: ClassDecoratorContext,
+    ): void;
     (options: EntityOptions): EntityDecorator;
     (tableName: string): EntityDecorator;
     (): EntityDecorator;
 };
 
-const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDecoratorContext): void => {
+const applyEntity = (
+    arg: string | EntityOptions | undefined,
+    context: ClassDecoratorContext,
+): void => {
     const className = String(context.name);
-    const columns   = [...((context.metadata?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [])];
-    const relations = (context.metadata?.[RELATIONS_KEY] as Array<IRelationMetadata> | undefined) ?? [];
-    const rawHooks  = (context.metadata?.[HOOKS_KEY] as Record<string, Array<string>> | undefined) ?? {};
-    const embeds    = (context.metadata?.[EMBEDS_KEY] as Array<IEmbedMetadata> | undefined) ?? [];
+    const columns = [
+        ...((context.metadata?.[COLUMNS_KEY] as
+            | Array<IColumnMetadata>
+            | undefined) ?? []),
+    ];
+    const relations =
+        (context.metadata?.[RELATIONS_KEY] as
+            | Array<IRelationMetadata>
+            | undefined) ?? [];
+    const rawHooks =
+        (context.metadata?.[HOOKS_KEY] as
+            | Record<string, Array<string>>
+            | undefined) ?? {};
+    const embeds =
+        (context.metadata?.[EMBEDS_KEY] as Array<IEmbedMetadata> | undefined) ??
+        [];
 
     for (const embed of embeds) {
         const targetClass = embed.target();
-        const embeddedCols = ((targetClass as any)[(Symbol as any).metadata]?.[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ?? [];
+        const embeddedCols =
+            ((targetClass as any)[(Symbol as any).metadata]?.[COLUMNS_KEY] as
+                | Array<IColumnMetadata>
+                | undefined) ?? [];
         for (const col of embeddedCols) {
             columns.push({
                 ...col,
-                propertyKey:    `${embed.prefix}${col.propertyKey}`,
-                databaseName:   `${embed.prefix}${col.databaseName}`,
-                embedOwnerKey:  embed.propertyKey,
+                propertyKey: `${embed.prefix}${col.propertyKey}`,
+                databaseName: `${embed.prefix}${col.databaseName}`,
+                embedOwnerKey: embed.propertyKey,
                 embedSourceKey: col.propertyKey,
             });
         }
     }
 
-    const tableName           = typeof arg === 'object' ? arg.tableName            : arg;
-    const filters             = typeof arg === 'object' ? arg.filters              : undefined;
-    const discriminatorColumn = typeof arg === 'object' ? arg.discriminatorColumn  : undefined;
+    const tableName = typeof arg === 'object' ? arg.tableName : arg;
+    const filters = typeof arg === 'object' ? arg.filters : undefined;
+    const discriminatorColumn =
+        typeof arg === 'object' ? arg.discriminatorColumn : undefined;
 
     registry.registerEntity(className, {
         tableName: tableName ?? className.toLowerCase(),
@@ -52,7 +82,7 @@ const applyEntity = (arg: string | EntityOptions | undefined, context: ClassDeco
         hooks: {
             beforeInsert: rawHooks.beforeInsert ?? [],
             beforeUpdate: rawHooks.beforeUpdate ?? [],
-            afterLoad:    rawHooks.afterLoad    ?? [],
+            afterLoad: rawHooks.afterLoad ?? [],
         },
         filters,
         embeds: embeds.length > 0 ? embeds : undefined,
@@ -68,6 +98,8 @@ export const Entity = ((
         applyEntity(undefined, context);
         return;
     }
-    return (_value: new (...args: Array<any>) => any, ctx: ClassDecoratorContext) =>
-        applyEntity(arg as string | EntityOptions | undefined, ctx);
+    return (
+        _value: new (...args: Array<any>) => any,
+        ctx: ClassDecoratorContext,
+    ) => applyEntity(arg as string | EntityOptions | undefined, ctx);
 }) as EntityFactory;

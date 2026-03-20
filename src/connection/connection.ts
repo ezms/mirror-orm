@@ -3,9 +3,17 @@ import { MssqlAdapter } from '../adapters/mssql/mssql-adapter';
 import { PostgresAdapter } from '../adapters/pg/pg-adapter';
 import { SqliteAdapter } from '../adapters/sqlite/sqlite-adapter';
 import { transactionStore } from '../context/transaction-store';
-import { MySQLDialect, MssqlDialect, PostgresDialect, SQLiteDialect } from '../dialects';
+import {
+    MySQLDialect,
+    MssqlDialect,
+    PostgresDialect,
+    SQLiteDialect,
+} from '../dialects';
 import { IQueryRunner } from '../interfaces/query-runner';
-import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
+import {
+    LoggingQueryRunner,
+    LoggingTransactionRunner,
+} from '../logger/logging-runner';
 import { registry } from '../metadata/registry';
 import { QueryBuilder } from '../query-builder/query-builder';
 import { Repository, RepositoryState } from '../repository/repository';
@@ -18,14 +26,18 @@ export class Connection {
 
     private constructor(private readonly options: IConnectionOptions) {
         if (options.adapter.queryArray) {
-            this.queryArray = (input, params) => options.adapter.queryArray!(input, params);
+            this.queryArray = (input, params) =>
+                options.adapter.queryArray!(input, params);
         }
         if (options.adapter.queryStream) {
-            this.queryStream = (sql, params) => options.adapter.queryStream!(sql, params);
+            this.queryStream = (sql, params) =>
+                options.adapter.queryStream!(sql, params);
         }
     }
 
-    public static async create(options: IConnectionOptions): Promise<Connection> {
+    public static async create(
+        options: IConnectionOptions,
+    ): Promise<Connection> {
         await options.adapter.connect(options);
         if (options.replicaAdapter) {
             await options.replicaAdapter.connect(options);
@@ -33,36 +45,90 @@ export class Connection {
         return new Connection(options);
     }
 
-    public static async postgres(config: IConnectionConfig): Promise<Connection> {
+    public static async postgres(
+        config: IConnectionConfig,
+    ): Promise<Connection> {
         const adapter = new PostgresAdapter();
-        const replicaAdapter = config.replica ? new PostgresAdapter() : undefined;
-        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
-        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new PostgresDialect() });
+        const replicaAdapter = config.replica
+            ? new PostgresAdapter()
+            : undefined;
+        if (replicaAdapter)
+            await replicaAdapter.connect({
+                ...config,
+                ...config.replica,
+                adapter: replicaAdapter,
+            });
+        return Connection.create({
+            ...config,
+            adapter,
+            replicaAdapter,
+            dialect: new PostgresDialect(),
+        });
     }
 
     public static async sqlite(config: IConnectionConfig): Promise<Connection> {
-        return Connection.create({ ...config, adapter: new SqliteAdapter(), dialect: new SQLiteDialect() });
+        return Connection.create({
+            ...config,
+            adapter: new SqliteAdapter(),
+            dialect: new SQLiteDialect(),
+        });
     }
 
     public static async mysql(config: IConnectionConfig): Promise<Connection> {
         const adapter = new MysqlAdapter();
         const replicaAdapter = config.replica ? new MysqlAdapter() : undefined;
-        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
-        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new MySQLDialect() });
+        if (replicaAdapter)
+            await replicaAdapter.connect({
+                ...config,
+                ...config.replica,
+                adapter: replicaAdapter,
+            });
+        return Connection.create({
+            ...config,
+            adapter,
+            replicaAdapter,
+            dialect: new MySQLDialect(),
+        });
     }
 
-    public static async sqlServer(config: IConnectionConfig): Promise<Connection> {
+    public static async sqlServer(
+        config: IConnectionConfig,
+    ): Promise<Connection> {
         const adapter = new MssqlAdapter();
         const replicaAdapter = config.replica ? new MssqlAdapter() : undefined;
-        if (replicaAdapter) await replicaAdapter.connect({ ...config, ...config.replica, adapter: replicaAdapter });
-        return Connection.create({ ...config, adapter, replicaAdapter, dialect: new MssqlDialect() });
+        if (replicaAdapter)
+            await replicaAdapter.connect({
+                ...config,
+                ...config.replica,
+                adapter: replicaAdapter,
+            });
+        return Connection.create({
+            ...config,
+            adapter,
+            replicaAdapter,
+            dialect: new MssqlDialect(),
+        });
     }
 
-    public static fromRunner(runner: IQueryRunner): Pick<Connection, 'getRepository'> {
-        return new Connection({ adapter: { connect: async () => {}, query: runner.query.bind(runner), acquireTransactionRunner: async () => { throw new Error('transactions not supported on fromRunner'); }, disconnect: async () => {} } });
+    public static fromRunner(
+        runner: IQueryRunner,
+    ): Pick<Connection, 'getRepository'> {
+        return new Connection({
+            adapter: {
+                connect: async () => {},
+                query: runner.query.bind(runner),
+                acquireTransactionRunner: async () => {
+                    throw new Error('transactions not supported on fromRunner');
+                },
+                disconnect: async () => {},
+            },
+        });
     }
 
-    public async query<T = unknown>(sql: string, params?: Array<unknown>): Promise<Array<T>> {
+    public async query<T = unknown>(
+        sql: string,
+        params?: Array<unknown>,
+    ): Promise<Array<T>> {
         return this.options.adapter.query<T>(sql, params);
     }
 
@@ -71,14 +137,24 @@ export class Connection {
 
     public getRepository<T>(target: new () => T): Repository<T> {
         const replicaRunner = this.options.replicaAdapter
-            ? this.withLogger({ query: (sql, params) => this.options.replicaAdapter!.query(sql as string, params) })
+            ? this.withLogger({
+                  query: (sql, params) =>
+                      this.options.replicaAdapter!.query(sql as string, params),
+              })
             : undefined;
-        return new Repository(this.getOrCompile(target), this.withLogger(this), true, replicaRunner);
+        return new Repository(
+            this.getOrCompile(target),
+            this.withLogger(this),
+            true,
+            replicaRunner,
+        );
     }
 
     private savepointCounter = 0;
 
-    public async transaction<R>(callback: (trx: TransactionContext) => Promise<R>): Promise<R> {
+    public async transaction<R>(
+        callback: (trx: TransactionContext) => Promise<R>,
+    ): Promise<R> {
         const activeRunner = transactionStore.getStore();
 
         if (activeRunner) {
@@ -108,7 +184,12 @@ export class Connection {
                 callback(
                     new TransactionContext(
                         loggingRunner,
-                        <T>(target: new () => T) => new Repository<T>(this.getOrCompile(target), loggingRunner, false),
+                        <T>(target: new () => T) =>
+                            new Repository<T>(
+                                this.getOrCompile(target),
+                                loggingRunner,
+                                false,
+                            ),
                     ),
                 ),
             );
@@ -125,7 +206,9 @@ export class Connection {
     public createQueryBuilder<T>(entity: new () => T): QueryBuilder<T> {
         const state = this.getOrCompile(entity);
         const adapter = this.options.adapter;
-        const runner: IQueryRunner = { query: (sql, params) => adapter.query(sql as string, params) };
+        const runner: IQueryRunner = {
+            query: (sql, params) => adapter.query(sql as string, params),
+        };
         return new QueryBuilder(state, this.withLogger(runner));
     }
 
@@ -140,8 +223,15 @@ export class Connection {
             return this.repoCache.get(key) as RepositoryState<T>;
         }
         const metadata = registry.getEntity(key);
-        if (!metadata) throw new Error(`Entity "${key}" not registered. Did you add @Entity?`);
-        const state = new RepositoryState(target, metadata, this.options.dialect);
+        if (!metadata)
+            throw new Error(
+                `Entity "${key}" not registered. Did you add @Entity?`,
+            );
+        const state = new RepositoryState(
+            target,
+            metadata,
+            this.options.dialect,
+        );
         this.repoCache.set(key, state as RepositoryState<unknown>);
         return state;
     }

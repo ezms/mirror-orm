@@ -13,9 +13,24 @@ const metadata: IEntityMetadata = {
     tableName: 'products',
     className: 'Product',
     columns: [
-        { propertyKey: 'id',    databaseName: 'id',    primary: true,  options: { generation: { strategy: 'identity' } } },
-        { propertyKey: 'name',  databaseName: 'name',  primary: false, options: {} },
-        { propertyKey: 'stock', databaseName: 'stock', primary: false, options: {} },
+        {
+            propertyKey: 'id',
+            databaseName: 'id',
+            primary: true,
+            options: { generation: { strategy: 'identity' } },
+        },
+        {
+            propertyKey: 'name',
+            databaseName: 'name',
+            primary: false,
+            options: {},
+        },
+        {
+            propertyKey: 'stock',
+            databaseName: 'stock',
+            primary: false,
+            options: {},
+        },
     ],
     relations: [],
 };

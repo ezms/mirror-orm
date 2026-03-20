@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { registry } from '../metadata/registry';
 import { Repository } from '../repository/repository';
-import { AuthorFixture, BookFixture, CategoryFixture, PersonFixture, PersonProfileFixture, RichBookFixture } from './fixtures/user.entity';
+import {
+    AuthorFixture,
+    BookFixture,
+    CategoryFixture,
+    PersonFixture,
+    PersonProfileFixture,
+    RichBookFixture,
+} from './fixtures/user.entity';
 
 // force decorator registration
 void AuthorFixture;
@@ -20,14 +27,36 @@ describe('@ManyToOne — múltiplos rows', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(BookFixture, { query: mockQuery }, registry.getEntity('BookFixture')!);
+        repo = new Repository(
+            BookFixture,
+            { query: mockQuery },
+            registry.getEntity('BookFixture')!,
+        );
     });
 
     it('hidrata cada livro com seu respectivo autor', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, title: 'Clean Code',        author_id: 10, 'mirror__author__id': 10, 'mirror__author__name': 'Robert Martin' },
-            { id: 2, title: 'Clean Architecture', author_id: 10, 'mirror__author__id': 10, 'mirror__author__name': 'Robert Martin' },
-            { id: 3, title: 'Refactoring',         author_id: 20, 'mirror__author__id': 20, 'mirror__author__name': 'Martin Fowler' },
+            {
+                id: 1,
+                title: 'Clean Code',
+                author_id: 10,
+                mirror__author__id: 10,
+                mirror__author__name: 'Robert Martin',
+            },
+            {
+                id: 2,
+                title: 'Clean Architecture',
+                author_id: 10,
+                mirror__author__id: 10,
+                mirror__author__name: 'Robert Martin',
+            },
+            {
+                id: 3,
+                title: 'Refactoring',
+                author_id: 20,
+                mirror__author__id: 20,
+                mirror__author__name: 'Martin Fowler',
+            },
         ]);
 
         const books = await repo.find({ relations: ['author'] });
@@ -42,10 +71,34 @@ describe('@ManyToOne — múltiplos rows', () => {
 
     it('mix null/não-null na mesma query — books com e sem autor', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, title: 'Com Autor',    author_id: 10,   'mirror__author__id': 10,   'mirror__author__name': 'Alice' },
-            { id: 2, title: 'Sem Autor',    author_id: null, 'mirror__author__id': null, 'mirror__author__name': null },
-            { id: 3, title: 'Outro Autor',  author_id: 20,   'mirror__author__id': 20,   'mirror__author__name': 'Bob' },
-            { id: 4, title: 'Sem Autor 2',  author_id: null, 'mirror__author__id': null, 'mirror__author__name': null },
+            {
+                id: 1,
+                title: 'Com Autor',
+                author_id: 10,
+                mirror__author__id: 10,
+                mirror__author__name: 'Alice',
+            },
+            {
+                id: 2,
+                title: 'Sem Autor',
+                author_id: null,
+                mirror__author__id: null,
+                mirror__author__name: null,
+            },
+            {
+                id: 3,
+                title: 'Outro Autor',
+                author_id: 20,
+                mirror__author__id: 20,
+                mirror__author__name: 'Bob',
+            },
+            {
+                id: 4,
+                title: 'Sem Autor 2',
+                author_id: null,
+                mirror__author__id: null,
+                mirror__author__name: null,
+            },
         ]);
 
         const books = await repo.find({ relations: ['author'] });
@@ -59,10 +112,15 @@ describe('@ManyToOne — múltiplos rows', () => {
     });
 
     it('FK column (authorId) é hidratada corretamente junto com a relação', async () => {
-        mockQuery.mockResolvedValueOnce([{
-            id: 5, title: 'Test', author_id: 99,
-            'mirror__author__id': 99, 'mirror__author__name': 'Eve',
-        }]);
+        mockQuery.mockResolvedValueOnce([
+            {
+                id: 5,
+                title: 'Test',
+                author_id: 99,
+                mirror__author__id: 99,
+                mirror__author__name: 'Eve',
+            },
+        ]);
 
         const [book] = await repo.find({ relations: ['author'] });
 
@@ -98,7 +156,13 @@ describe('@ManyToOne — múltiplos rows', () => {
 
     it('WHERE + orderBy + limit + relação geram SQL correto e completo', async () => {
         mockQuery.mockResolvedValueOnce([]);
-        await repo.find({ relations: ['author'], where: { authorId: 10 }, orderBy: { id: 'ASC' }, limit: 3, offset: 6 });
+        await repo.find({
+            relations: ['author'],
+            where: { authorId: 10 },
+            orderBy: { id: 'ASC' },
+            limit: 3,
+            offset: 6,
+        });
 
         const [sql] = mockQuery.mock.calls[0];
         expect(sql).toContain('LEFT JOIN');
@@ -117,7 +181,11 @@ describe('@ManyToOne — 2 relações na mesma entidade', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(RichBookFixture, { query: mockQuery }, registry.getEntity('RichBookFixture')!);
+        repo = new Repository(
+            RichBookFixture,
+            { query: mockQuery },
+            registry.getEntity('RichBookFixture')!,
+        );
     });
 
     it('gera dois LEFT JOINs no SQL', async () => {
@@ -142,17 +210,19 @@ describe('@ManyToOne — 2 relações na mesma entidade', () => {
 
     it('hidrata ambas as relações corretamente', async () => {
         const publishedAt = new Date('2024-03-01T10:00:00Z');
-        mockQuery.mockResolvedValueOnce([{
-            id: 1,
-            title: 'DDD',
-            author_id: 5,
-            category_id: 3,
-            published_at: publishedAt,
-            'mirror__author__id': 5,
-            'mirror__author__name': 'Eric Evans',
-            'mirror__category__id': 3,
-            'mirror__category__name': 'Architecture',
-        }]);
+        mockQuery.mockResolvedValueOnce([
+            {
+                id: 1,
+                title: 'DDD',
+                author_id: 5,
+                category_id: 3,
+                published_at: publishedAt,
+                mirror__author__id: 5,
+                mirror__author__name: 'Eric Evans',
+                mirror__category__id: 3,
+                mirror__category__name: 'Architecture',
+            },
+        ]);
 
         const [book] = await repo.find({ relations: ['author', 'category'] });
 
@@ -165,17 +235,19 @@ describe('@ManyToOne — 2 relações na mesma entidade', () => {
     });
 
     it('uma relação nula e outra presente — hidratação independente', async () => {
-        mockQuery.mockResolvedValueOnce([{
-            id: 2,
-            title: 'Unknown Author',
-            author_id: null,
-            category_id: 7,
-            published_at: null,
-            'mirror__author__id': null,
-            'mirror__author__name': null,
-            'mirror__category__id': 7,
-            'mirror__category__name': 'Fiction',
-        }]);
+        mockQuery.mockResolvedValueOnce([
+            {
+                id: 2,
+                title: 'Unknown Author',
+                author_id: null,
+                category_id: 7,
+                published_at: null,
+                mirror__author__id: null,
+                mirror__author__name: null,
+                mirror__category__id: 7,
+                mirror__category__name: 'Fiction',
+            },
+        ]);
 
         const [book] = await repo.find({ relations: ['author', 'category'] });
 
@@ -202,7 +274,11 @@ describe('@OneToMany — agrupamento com múltiplos autores e livros', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(AuthorFixture, { query: mockQuery }, registry.getEntity('AuthorFixture')!);
+        repo = new Repository(
+            AuthorFixture,
+            { query: mockQuery },
+            registry.getEntity('AuthorFixture')!,
+        );
     });
 
     it('3 autores com 5 livros no total — distribuição correta', async () => {
@@ -213,17 +289,21 @@ describe('@OneToMany — agrupamento com múltiplos autores e livros', () => {
                 { id: 3, name: 'Eric Evans' },
             ])
             .mockResolvedValueOnce([
-                { id: 10, title: 'Clean Code',         author_id: 1 },
+                { id: 10, title: 'Clean Code', author_id: 1 },
                 { id: 11, title: 'Clean Architecture', author_id: 1 },
-                { id: 12, title: 'Clean Agile',        author_id: 1 },
-                { id: 20, title: 'Refactoring',        author_id: 2 },
-                { id: 30, title: 'DDD',                author_id: 3 },
+                { id: 12, title: 'Clean Agile', author_id: 1 },
+                { id: 20, title: 'Refactoring', author_id: 2 },
+                { id: 30, title: 'DDD', author_id: 3 },
             ]);
 
         const authors = await repo.find({ relations: ['books'] });
 
         expect(authors[0].books).toHaveLength(3);
-        expect(authors[0].books.map(b => b.title)).toEqual(['Clean Code', 'Clean Architecture', 'Clean Agile']);
+        expect(authors[0].books.map((b) => b.title)).toEqual([
+            'Clean Code',
+            'Clean Architecture',
+            'Clean Agile',
+        ]);
         expect(authors[1].books).toHaveLength(1);
         expect(authors[1].books[0].title).toBe('Refactoring');
         expect(authors[2].books).toHaveLength(1);
@@ -305,10 +385,13 @@ describe('@OneToMany — agrupamento com múltiplos autores e livros', () => {
     });
 
     it('WHERE + orderBy na query principal são passados corretamente', async () => {
-        mockQuery
-            .mockResolvedValueOnce([])
+        mockQuery.mockResolvedValueOnce([]);
 
-        await repo.find({ relations: ['books'], where: { name: 'Martin' }, orderBy: { id: 'DESC' } });
+        await repo.find({
+            relations: ['books'],
+            where: { name: 'Martin' },
+            orderBy: { id: 'DESC' },
+        });
 
         const [sql] = mockQuery.mock.calls[0];
         expect(sql).toContain('WHERE');
@@ -325,12 +408,22 @@ describe('@OneToOne — owner (tem FK)', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(PersonProfileFixture, { query: mockQuery }, registry.getEntity('PersonProfileFixture')!);
+        repo = new Repository(
+            PersonProfileFixture,
+            { query: mockQuery },
+            registry.getEntity('PersonProfileFixture')!,
+        );
     });
 
     it('gera LEFT JOIN e hidrata a entidade relacionada', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
+            {
+                id: 1,
+                bio: 'Dev',
+                person_id: 10,
+                mirror__person__id: 10,
+                mirror__person__name: 'Alice',
+            },
         ]);
 
         const [profile] = await repo.find({ relations: ['person'] });
@@ -345,7 +438,13 @@ describe('@OneToOne — owner (tem FK)', () => {
 
     it('atribui null quando FK é null', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, bio: 'Sem pessoa', person_id: null, 'mirror__person__id': null, 'mirror__person__name': null },
+            {
+                id: 1,
+                bio: 'Sem pessoa',
+                person_id: null,
+                mirror__person__id: null,
+                mirror__person__name: null,
+            },
         ]);
 
         const [profile] = await repo.find({ relations: ['person'] });
@@ -354,21 +453,33 @@ describe('@OneToOne — owner (tem FK)', () => {
     });
 
     it('não usa JOIN quando relations não é solicitado', async () => {
-        mockQuery.mockResolvedValueOnce([
-            { id: 1, bio: 'Dev', person_id: 10 },
-        ]);
+        mockQuery.mockResolvedValueOnce([{ id: 1, bio: 'Dev', person_id: 10 }]);
 
         const [profile] = await repo.find({});
 
         const [sql] = mockQuery.mock.calls[0];
         expect(sql).not.toContain('JOIN');
-        expect((profile as unknown as Record<string, unknown>).person).toBeUndefined();
+        expect(
+            (profile as unknown as Record<string, unknown>).person,
+        ).toBeUndefined();
     });
 
     it('múltiplos perfis com pessoas distintas', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
-            { id: 2, bio: 'Designer', person_id: 20, 'mirror__person__id': 20, 'mirror__person__name': 'Bob' },
+            {
+                id: 1,
+                bio: 'Dev',
+                person_id: 10,
+                mirror__person__id: 10,
+                mirror__person__name: 'Alice',
+            },
+            {
+                id: 2,
+                bio: 'Designer',
+                person_id: 20,
+                mirror__person__id: 20,
+                mirror__person__name: 'Bob',
+            },
         ]);
 
         const profiles = await repo.find({ relations: ['person'] });
@@ -379,7 +490,13 @@ describe('@OneToOne — owner (tem FK)', () => {
 
     it('instanceof correto na entidade relacionada', async () => {
         mockQuery.mockResolvedValueOnce([
-            { id: 1, bio: 'Dev', person_id: 10, 'mirror__person__id': 10, 'mirror__person__name': 'Alice' },
+            {
+                id: 1,
+                bio: 'Dev',
+                person_id: 10,
+                mirror__person__id: 10,
+                mirror__person__name: 'Alice',
+            },
         ]);
 
         const [profile] = await repo.find({ relations: ['person'] });
@@ -395,7 +512,11 @@ describe('@OneToOne — inverse (não tem FK)', () => {
 
     beforeEach(() => {
         mockQuery = vi.fn();
-        repo = new Repository(PersonFixture, { query: mockQuery }, registry.getEntity('PersonFixture')!);
+        repo = new Repository(
+            PersonFixture,
+            { query: mockQuery },
+            registry.getEntity('PersonFixture')!,
+        );
     });
 
     it('faz batch query separada e atribui o perfil à pessoa', async () => {
@@ -432,7 +553,7 @@ describe('@OneToOne — inverse (não tem FK)', () => {
                 { id: 20, name: 'Bob' },
             ])
             .mockResolvedValueOnce([
-                { id: 1, bio: 'Dev',      person_id: 10 },
+                { id: 1, bio: 'Dev', person_id: 10 },
                 { id: 2, bio: 'Designer', person_id: 20 },
             ]);
 

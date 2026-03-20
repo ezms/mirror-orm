@@ -2,7 +2,10 @@ import { IColumnMetadata } from '../interfaces/column-metadata';
 import { IColumnOptions } from '../interfaces/column-options';
 import { COLUMNS_KEY } from '../metadata/symbols';
 
-type ColumnDecorator = (_value: undefined, context: ClassFieldDecoratorContext) => void;
+type ColumnDecorator = (
+    _value: undefined,
+    context: ClassFieldDecoratorContext,
+) => void;
 
 type ColumnFactory = {
     (_value: undefined, context: ClassFieldDecoratorContext): void;
@@ -11,7 +14,10 @@ type ColumnFactory = {
     (): ColumnDecorator;
 };
 
-const applyColumn = (nameOrOptions: string | IColumnOptions | undefined, context: ClassFieldDecoratorContext): void => {
+const applyColumn = (
+    nameOrOptions: string | IColumnOptions | undefined,
+    context: ClassFieldDecoratorContext,
+): void => {
     let columnName = String(context.name);
     let options: IColumnOptions = {};
 
@@ -32,7 +38,8 @@ const applyColumn = (nameOrOptions: string | IColumnOptions | undefined, context
     /* v8 ignore next */
     if (!context.metadata) return;
     /* v8 ignore next */
-    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??= [];
+    (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata> | undefined) ??=
+        [];
     (context.metadata[COLUMNS_KEY] as Array<IColumnMetadata>).push(column);
 };
 

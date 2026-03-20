@@ -5,7 +5,9 @@ export const entitySnapshots = {
         (entity as Record<symbol, unknown>)[LOAD_STATE_KEY] = snap;
     },
     get(entity: object): Array<unknown> | undefined {
-        return (entity as Record<symbol, unknown>)[LOAD_STATE_KEY] as Array<unknown> | undefined;
+        return (entity as Record<symbol, unknown>)[LOAD_STATE_KEY] as
+            | Array<unknown>
+            | undefined;
     },
     has(entity: object): boolean {
         return LOAD_STATE_KEY in entity;

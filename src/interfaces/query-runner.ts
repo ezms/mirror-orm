@@ -5,7 +5,16 @@ export interface INamedQuery {
 }
 
 export interface IQueryRunner {
-    query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>>;
-    queryArray?<T extends unknown[] = unknown[]>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>>;
-    queryStream?(sql: string, params?: Array<unknown>): AsyncIterable<unknown[]>;
+    query<T = unknown>(
+        input: string | INamedQuery,
+        params?: Array<unknown>,
+    ): Promise<Array<T>>;
+    queryArray?<T extends unknown[] = unknown[]>(
+        input: string | INamedQuery,
+        params?: Array<unknown>,
+    ): Promise<Array<T>>;
+    queryStream?(
+        sql: string,
+        params?: Array<unknown>,
+    ): AsyncIterable<unknown[]>;
 }

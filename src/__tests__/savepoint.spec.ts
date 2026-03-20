@@ -21,12 +21,16 @@ describe('SavepointRunner', () => {
 
     it('commit() emits RELEASE SAVEPOINT', async () => {
         await sp.commit();
-        expect(inner.query).toHaveBeenCalledWith('RELEASE SAVEPOINT "mirror_sp_1"');
+        expect(inner.query).toHaveBeenCalledWith(
+            'RELEASE SAVEPOINT "mirror_sp_1"',
+        );
     });
 
     it('rollback() emits ROLLBACK TO SAVEPOINT', async () => {
         await sp.rollback();
-        expect(inner.query).toHaveBeenCalledWith('ROLLBACK TO SAVEPOINT "mirror_sp_1"');
+        expect(inner.query).toHaveBeenCalledWith(
+            'ROLLBACK TO SAVEPOINT "mirror_sp_1"',
+        );
     });
 
     it('release() is a no-op', () => {
@@ -37,6 +41,8 @@ describe('SavepointRunner', () => {
     it('uses the savepoint name provided at construction', async () => {
         const sp2 = new SavepointRunner(inner, 'mirror_sp_42');
         await sp2.commit();
-        expect(inner.query).toHaveBeenCalledWith('RELEASE SAVEPOINT "mirror_sp_42"');
+        expect(inner.query).toHaveBeenCalledWith(
+            'RELEASE SAVEPOINT "mirror_sp_42"',
+        );
     });
 });

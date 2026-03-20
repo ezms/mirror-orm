@@ -33,6 +33,9 @@ export interface IConnectionOptions {
     logger?: ILogger;
 }
 
-export type IConnectionConfig = Omit<IConnectionOptions, 'adapter' | 'replicaAdapter'> & {
+export type IConnectionConfig = Omit<
+    IConnectionOptions,
+    'adapter' | 'replicaAdapter'
+> & {
     replica?: IReplicaConfig;
 };

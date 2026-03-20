@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ConsoleLogger } from '../logger/console.logger';
-import { LoggingQueryRunner, LoggingTransactionRunner } from '../logger/logging-runner';
+import {
+    LoggingQueryRunner,
+    LoggingTransactionRunner,
+} from '../logger/logging-runner';
 import { ILogger } from '../logger/logger.interface';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { ITransactionRunner } from '../interfaces/transaction-runner';
@@ -112,10 +115,10 @@ describe('LoggingTransactionRunner', () => {
     beforeEach(() => {
         logger = { query: vi.fn() };
         innerTxRunner = {
-            query:    vi.fn().mockResolvedValue([]),
-            commit:   vi.fn().mockResolvedValue(undefined),
+            query: vi.fn().mockResolvedValue([]),
+            commit: vi.fn().mockResolvedValue(undefined),
             rollback: vi.fn().mockResolvedValue(undefined),
-            release:  vi.fn(),
+            release: vi.fn(),
         };
     });
 

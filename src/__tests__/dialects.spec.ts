@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { MySQLDialect } from '../dialects/mysql.dialect';
 import { SQLiteDialect } from '../dialects/sqlite.dialect';
 
-const mysql  = new MySQLDialect();
+const mysql = new MySQLDialect();
 const sqlite = new SQLiteDialect();
 
 // ─── MySQLDialect ─────────────────────────────────────────────────────────────
@@ -29,7 +29,9 @@ describe('MySQLDialect', () => {
     });
 
     it('buildLimitOffset with both limit and offset', () => {
-        expect(mysql.buildLimitOffset(false, 10, 20)).toBe(' LIMIT 10 OFFSET 20');
+        expect(mysql.buildLimitOffset(false, 10, 20)).toBe(
+            ' LIMIT 10 OFFSET 20',
+        );
     });
 
     it('buildLimitOffset with limit only', () => {

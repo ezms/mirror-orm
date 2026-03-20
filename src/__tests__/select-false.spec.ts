@@ -64,9 +64,12 @@ describe('select: false', () => {
     it('still includes column in INSERT', async () => {
         const runner = makeRunner();
         const repo = makeRepo(runner);
-        const user = Object.assign(new SfUser(), { name: 'Alice', passwordHash: 'hashed' });
+        const user = Object.assign(new SfUser(), {
+            name: 'Alice',
+            passwordHash: 'hashed',
+        });
         await repo.save(user);
-        const insert = runner.calls.find(c => c.sql.includes('INSERT'));
+        const insert = runner.calls.find((c) => c.sql.includes('INSERT'));
         expect(insert!.sql).toContain('"passwordHash"');
     });
 });

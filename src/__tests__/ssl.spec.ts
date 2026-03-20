@@ -3,7 +3,9 @@ import { PostgresAdapter } from '../adapters/pg/pg-adapter';
 
 const { MockPool } = vi.hoisted(() => {
     const mockPool = { query: vi.fn(), connect: vi.fn(), end: vi.fn() };
-    const MockPool = vi.fn(function() { return mockPool; });
+    const MockPool = vi.fn(function () {
+        return mockPool;
+    });
     return { MockPool };
 });
 
@@ -14,14 +16,30 @@ describe('SSL support in PostgresAdapter', () => {
 
     it('passes ssl: true to Pool when using host/port config', async () => {
         const adapter = new PostgresAdapter();
-        await adapter.connect({ adapter, host: 'localhost', database: 'db', user: 'u', password: 'p', ssl: true });
-        expect(MockPool).toHaveBeenCalledWith(expect.objectContaining({ ssl: true }));
+        await adapter.connect({
+            adapter,
+            host: 'localhost',
+            database: 'db',
+            user: 'u',
+            password: 'p',
+            ssl: true,
+        });
+        expect(MockPool).toHaveBeenCalledWith(
+            expect.objectContaining({ ssl: true }),
+        );
     });
 
     it('passes ssl object to Pool when using host/port config', async () => {
         const adapter = new PostgresAdapter();
         const ssl = { rejectUnauthorized: false };
-        await adapter.connect({ adapter, host: 'localhost', database: 'db', user: 'u', password: 'p', ssl });
+        await adapter.connect({
+            adapter,
+            host: 'localhost',
+            database: 'db',
+            user: 'u',
+            password: 'p',
+            ssl,
+        });
         expect(MockPool).toHaveBeenCalledWith(expect.objectContaining({ ssl }));
     });
 
@@ -34,8 +52,16 @@ describe('SSL support in PostgresAdapter', () => {
 
     it('omits ssl from Pool config when not provided', async () => {
         const adapter = new PostgresAdapter();
-        await adapter.connect({ adapter, host: 'localhost', database: 'db', user: 'u', password: 'p' });
-        const calls = MockPool.mock.calls as Array<Array<Record<string, unknown>>>;
+        await adapter.connect({
+            adapter,
+            host: 'localhost',
+            database: 'db',
+            user: 'u',
+            password: 'p',
+        });
+        const calls = MockPool.mock.calls as Array<
+            Array<Record<string, unknown>>
+        >;
         expect(calls[0]?.[0]?.ssl).toBeUndefined();
     });
 });

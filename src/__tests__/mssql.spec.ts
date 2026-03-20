@@ -44,18 +44,30 @@ describe('SQL Server adapter', () => {
 
     beforeAll(async () => {
         conn = await Connection.sqlServer(DB_CONFIG);
-        await conn.query(`IF OBJECT_ID('ms_users') IS NOT NULL DROP TABLE ms_users`);
-        await conn.query(`IF OBJECT_ID('ms_products') IS NOT NULL DROP TABLE ms_products`);
-        await conn.query(`CREATE TABLE ms_users (id INT IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(255) NOT NULL, email NVARCHAR(255))`);
-        await conn.query(`CREATE TABLE ms_products (id NVARCHAR(36) PRIMARY KEY, title NVARCHAR(255) NOT NULL)`);
+        await conn.query(
+            `IF OBJECT_ID('ms_users') IS NOT NULL DROP TABLE ms_users`,
+        );
+        await conn.query(
+            `IF OBJECT_ID('ms_products') IS NOT NULL DROP TABLE ms_products`,
+        );
+        await conn.query(
+            `CREATE TABLE ms_users (id INT IDENTITY(1,1) PRIMARY KEY, name NVARCHAR(255) NOT NULL, email NVARCHAR(255))`,
+        );
+        await conn.query(
+            `CREATE TABLE ms_products (id NVARCHAR(36) PRIMARY KEY, title NVARCHAR(255) NOT NULL)`,
+        );
         userRepo = conn.getRepository(MsUser);
         productRepo = conn.getRepository(MsProduct);
     });
 
     afterAll(async () => {
         if (!conn) return;
-        await conn.query(`IF OBJECT_ID('ms_users') IS NOT NULL DROP TABLE ms_users`);
-        await conn.query(`IF OBJECT_ID('ms_products') IS NOT NULL DROP TABLE ms_products`);
+        await conn.query(
+            `IF OBJECT_ID('ms_users') IS NOT NULL DROP TABLE ms_users`,
+        );
+        await conn.query(
+            `IF OBJECT_ID('ms_products') IS NOT NULL DROP TABLE ms_products`,
+        );
         await conn.disconnect();
     });
 
@@ -63,7 +75,10 @@ describe('SQL Server adapter', () => {
 
     describe('save (identity PK)', () => {
         it('inserts and returns hydrated entity with auto-generated id', async () => {
-            const user = Object.assign(new MsUser(), { name: 'Alice', email: 'alice@test.com' });
+            const user = Object.assign(new MsUser(), {
+                name: 'Alice',
+                email: 'alice@test.com',
+            });
             const saved = await userRepo.save(user);
 
             expect(saved).toBeInstanceOf(MsUser);
@@ -73,7 +88,9 @@ describe('SQL Server adapter', () => {
         });
 
         it('updates existing entity', async () => {
-            const user = await userRepo.save(Object.assign(new MsUser(), { name: 'Bob' }));
+            const user = await userRepo.save(
+                Object.assign(new MsUser(), { name: 'Bob' }),
+            );
             user.name = 'Bob Updated';
             const updated = await userRepo.save(user);
 
@@ -86,7 +103,9 @@ describe('SQL Server adapter', () => {
 
     describe('save (uuid PK)', () => {
         it('inserts and returns hydrated entity with generated uuid', async () => {
-            const product = Object.assign(new MsProduct(), { title: 'Mirror Book' });
+            const product = Object.assign(new MsProduct(), {
+                title: 'Mirror Book',
+            });
             const saved = await productRepo.save(product);
 
             expect(saved).toBeInstanceOf(MsProduct);
@@ -105,7 +124,12 @@ describe('SQL Server adapter', () => {
         });
 
         it('findById returns correct entity', async () => {
-            const inserted = await userRepo.save(Object.assign(new MsUser(), { name: 'Carol', email: 'c@test.com' }));
+            const inserted = await userRepo.save(
+                Object.assign(new MsUser(), {
+                    name: 'Carol',
+                    email: 'c@test.com',
+                }),
+            );
             const found = await userRepo.findById(inserted.id);
 
             expect(found).toBeInstanceOf(MsUser);
@@ -121,7 +145,12 @@ describe('SQL Server adapter', () => {
 
     describe('find (where)', () => {
         it('filters by exact column value', async () => {
-            await userRepo.save(Object.assign(new MsUser(), { name: 'FilterMe', email: 'f@x.com' }));
+            await userRepo.save(
+                Object.assign(new MsUser(), {
+                    name: 'FilterMe',
+                    email: 'f@x.com',
+                }),
+            );
             const result = await userRepo.find({ where: { name: 'FilterMe' } });
 
             expect(result.length).toBeGreaterThanOrEqual(1);
@@ -133,7 +162,9 @@ describe('SQL Server adapter', () => {
 
     describe('remove', () => {
         it('deletes an entity by PK', async () => {
-            const user = await userRepo.save(Object.assign(new MsUser(), { name: 'Delete Me' }));
+            const user = await userRepo.save(
+                Object.assign(new MsUser(), { name: 'Delete Me' }),
+            );
             await userRepo.remove(user);
 
             expect(await userRepo.findById(user.id)).toBeNull();
@@ -154,8 +185,12 @@ describe('SQL Server adapter', () => {
         });
 
         it('removes multiple entities by PK', async () => {
-            const a = await userRepo.save(Object.assign(new MsUser(), { name: 'RM A' }));
-            const b = await userRepo.save(Object.assign(new MsUser(), { name: 'RM B' }));
+            const a = await userRepo.save(
+                Object.assign(new MsUser(), { name: 'RM A' }),
+            );
+            const b = await userRepo.save(
+                Object.assign(new MsUser(), { name: 'RM B' }),
+            );
             const before = await userRepo.findAll();
 
             await userRepo.removeMany([a, b]);
@@ -171,9 +206,11 @@ describe('SQL Server adapter', () => {
         it('commits changes inside a transaction', async () => {
             const before = await userRepo.findAll();
 
-            await conn.transaction(async trx => {
+            await conn.transaction(async (trx) => {
                 const repo = trx.getRepository(MsUser);
-                await repo.save(Object.assign(new MsUser(), { name: 'Trx User' }));
+                await repo.save(
+                    Object.assign(new MsUser(), { name: 'Trx User' }),
+                );
             });
 
             const after = await userRepo.findAll();
@@ -184,9 +221,11 @@ describe('SQL Server adapter', () => {
             const before = await userRepo.findAll();
 
             await expect(
-                conn.transaction(async trx => {
+                conn.transaction(async (trx) => {
                     const repo = trx.getRepository(MsUser);
-                    await repo.save(Object.assign(new MsUser(), { name: 'Rollback' }));
+                    await repo.save(
+                        Object.assign(new MsUser(), { name: 'Rollback' }),
+                    );
                     throw new Error('force rollback');
                 }),
             ).rejects.toThrow('force rollback');

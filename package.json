@@ -1,6 +1,6 @@
 {
     "name": "mirror-orm",
-    "version": "0.1.0-alpha.5",
+    "version": "1.0.0",
     "description": "Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server using Stage 3 decorators",
     "main": "dist/index.js",
     "module": "dist/index.js",
@@ -54,10 +54,18 @@
         "pg": ">=8"
     },
     "peerDependenciesMeta": {
-        "better-sqlite3": { "optional": true },
-        "mssql":          { "optional": true },
-        "mysql2":         { "optional": true },
-        "pg":             { "optional": true }
+        "better-sqlite3": {
+            "optional": true
+        },
+        "mssql": {
+            "optional": true
+        },
+        "mysql2": {
+            "optional": true
+        },
+        "pg": {
+            "optional": true
+        }
     },
     "devDependencies": {
         "@changesets/cli": "^2.30.0",

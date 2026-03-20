@@ -1,7 +1,3 @@
-import { MysqlAdapter } from '../adapters/mysql/mysql-adapter';
-import { MssqlAdapter } from '../adapters/mssql/mssql-adapter';
-import { PostgresAdapter } from '../adapters/pg/pg-adapter';
-import { SqliteAdapter } from '../adapters/sqlite/sqlite-adapter';
 import { transactionStore } from '../context/transaction-store';
 import {
     MySQLDialect,
@@ -48,6 +44,7 @@ export class Connection {
     public static async postgres(
         config: IConnectionConfig,
     ): Promise<Connection> {
+        const { PostgresAdapter } = await import('../adapters/pg/pg-adapter');
         const adapter = new PostgresAdapter();
         const replicaAdapter = config.replica
             ? new PostgresAdapter()
@@ -67,6 +64,7 @@ export class Connection {
     }
 
     public static async sqlite(config: IConnectionConfig): Promise<Connection> {
+        const { SqliteAdapter } = await import('../adapters/sqlite/sqlite-adapter');
         return Connection.create({
             ...config,
             adapter: new SqliteAdapter(),
@@ -75,6 +73,7 @@ export class Connection {
     }
 
     public static async mysql(config: IConnectionConfig): Promise<Connection> {
+        const { MysqlAdapter } = await import('../adapters/mysql/mysql-adapter');
         const adapter = new MysqlAdapter();
         const replicaAdapter = config.replica ? new MysqlAdapter() : undefined;
         if (replicaAdapter)
@@ -94,6 +93,7 @@ export class Connection {
     public static async sqlServer(
         config: IConnectionConfig,
     ): Promise<Connection> {
+        const { MssqlAdapter } = await import('../adapters/mssql/mssql-adapter');
         const adapter = new MssqlAdapter();
         const replicaAdapter = config.replica ? new MssqlAdapter() : undefined;
         if (replicaAdapter)

@@ -64,7 +64,8 @@ export class Connection {
     }
 
     public static async sqlite(config: IConnectionConfig): Promise<Connection> {
-        const { SqliteAdapter } = await import('../adapters/sqlite/sqlite-adapter');
+        const { SqliteAdapter } =
+            await import('../adapters/sqlite/sqlite-adapter');
         return Connection.create({
             ...config,
             adapter: new SqliteAdapter(),
@@ -73,7 +74,8 @@ export class Connection {
     }
 
     public static async mysql(config: IConnectionConfig): Promise<Connection> {
-        const { MysqlAdapter } = await import('../adapters/mysql/mysql-adapter');
+        const { MysqlAdapter } =
+            await import('../adapters/mysql/mysql-adapter');
         const adapter = new MysqlAdapter();
         const replicaAdapter = config.replica ? new MysqlAdapter() : undefined;
         if (replicaAdapter)
@@ -93,7 +95,8 @@ export class Connection {
     public static async sqlServer(
         config: IConnectionConfig,
     ): Promise<Connection> {
-        const { MssqlAdapter } = await import('../adapters/mssql/mssql-adapter');
+        const { MssqlAdapter } =
+            await import('../adapters/mssql/mssql-adapter');
         const adapter = new MssqlAdapter();
         const replicaAdapter = config.replica ? new MssqlAdapter() : undefined;
         if (replicaAdapter)

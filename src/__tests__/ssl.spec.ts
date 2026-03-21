@@ -12,7 +12,12 @@ const { MockPool } = vi.hoisted(() => {
 vi.mock('pg', () => ({
     Pool: MockPool,
     types: {
-        builtins: { TIMESTAMPTZ: 1184, TIMESTAMP: 1114, DATE: 1082, INTERVAL: 1186 },
+        builtins: {
+            TIMESTAMPTZ: 1184,
+            TIMESTAMP: 1114,
+            DATE: 1082,
+            INTERVAL: 1186,
+        },
         getTypeParser: vi.fn(() => (val: string) => val),
     },
 }));

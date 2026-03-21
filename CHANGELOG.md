@@ -1,5 +1,12 @@
 # mirror-orm
 
+## 1.0.1
+
+### Patch Changes
+
+- 6b0e987: "fix: lazy-load database drivers to avoid requiring optional dependencies"
+- "fix: lazy-load database drivers to avoid requiring optional dependencies"
+
 ## 1.0.0
 
 ### Major Changes

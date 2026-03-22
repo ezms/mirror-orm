@@ -69,14 +69,28 @@ jobs:
           MSSQL_SA_PASSWORD: Mirror@12345
         ports: ['1433:1433']
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -No"
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -C -b"
           --health-interval 15s
           --health-timeout 10s
           --health-retries 10
 
     env:
       MIRROR_TEST_PG_URL: postgres://mirror:mirror@localhost:5432/mirror_test
+      MIRROR_TEST_PG_HOST: localhost
+      MIRROR_TEST_PG_PORT: 5432
+      MIRROR_TEST_PG_DATABASE: mirror_test
+      MIRROR_TEST_PG_USER: mirror
+      MIRROR_TEST_PG_PASSWORD: mirror
+
       MIRROR_TEST_MYSQL_URL: mysql://root:mirror@localhost:3306/mirror_test
+      MIRROR_TEST_MYSQL_HOST: localhost
+      MIRROR_TEST_MYSQL_PORT: 3306
+      MIRROR_TEST_MYSQL_DATABASE: mirror_test
+      MIRROR_TEST_MYSQL_USER: root
+      MIRROR_TEST_MYSQL_PASSWORD: mirror
+
+      MIRROR_TEST_MSSQL_PORT: 1433
+      MIRROR_TEST_MSSQL_DATABASE: mirror_test
       MIRROR_TEST_MSSQL_SERVER: localhost
       MIRROR_TEST_MSSQL_USER: SA
       MIRROR_TEST_MSSQL_PASSWORD: Mirror@12345
@@ -99,7 +113,9 @@ jobs:
       # DB drivers are peerDependencies (optional for users) but required for tests.
       # Add them back to devDependencies if you want to avoid this step.
       - name: Install DB drivers for tests
-        run: pnpm add pg better-sqlite3 mysql2 mssql
+        run: |
+          pnpm add pg better-sqlite3 mysql2 mssql
+          pnpm rebuild better-sqlite3
 
       - name: Run tests with coverage
         run: pnpm test:coverage

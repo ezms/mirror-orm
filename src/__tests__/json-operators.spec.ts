@@ -17,6 +17,7 @@ import {
 import { registry } from '../metadata/registry';
 import { Repository, RepositoryState } from '../repository/repository';
 import { SqlAssembler } from '../repository/sql-assembler';
+
 @Entity('json_docs')
 class JsonDoc {
     @PrimaryColumn({ strategy: 'uuid_v4' })
@@ -106,11 +107,11 @@ import { afterAll, beforeAll } from 'vitest';
 import { Connection } from '../connection/connection';
 
 const DB_CONFIG = {
-    host: '127.0.0.1',
-    port: 5432,
-    database: 'mirror_test',
-    user: 'postgres',
-    password: 'postgres',
+    host: process.env.MIRROR_TEST_PG_HOST || '127.0.0.1',
+    port: parseInt(process.env.MIRROR_TEST_PG_PORT || '5432'),
+    database: process.env.MIRROR_TEST_PG_DATABASE || 'mirror_test',
+    user: process.env.MIRROR_TEST_PG_USER || 'postgres',
+    password: process.env.MIRROR_TEST_PG_PASSWORD || 'postgres',
 };
 
 describe('JSON operators — Postgres integration', () => {

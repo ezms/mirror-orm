@@ -16,16 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.31.0
-
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm build
@@ -77,7 +74,6 @@ jobs:
           --health-retries 30
 
     env:
-      # PostgreSQL
       MIRROR_TEST_PG_URL: postgres://mirror:mirror@localhost:5432/mirror_test
       MIRROR_TEST_PG_HOST: localhost
       MIRROR_TEST_PG_PORT: 5432
@@ -85,7 +81,6 @@ jobs:
       MIRROR_TEST_PG_USER: mirror
       MIRROR_TEST_PG_PASSWORD: mirror
 
-      # MySQL
       MIRROR_TEST_MYSQL_URL: mysql://root:mirror@localhost:3306/mirror_test
       MIRROR_TEST_MYSQL_HOST: localhost
       MIRROR_TEST_MYSQL_PORT: 3306
@@ -93,7 +88,6 @@ jobs:
       MIRROR_TEST_MYSQL_USER: root
       MIRROR_TEST_MYSQL_PASSWORD: mirror
 
-      # SQL Server
       MIRROR_TEST_MSSQL_SERVER: localhost
       MIRROR_TEST_MSSQL_PORT: 1433
       MIRROR_TEST_MSSQL_DATABASE: mirror_test
@@ -103,11 +97,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.31.0
-
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -116,70 +108,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Install system dependencies for native bindings
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 make g++
-
-      - name: Install database drivers for tests
+      - name: Setup database drivers
         run: |
-          # Add database drivers as dev dependencies
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3 make g++
           pnpm add -D pg better-sqlite3 mysql2 mssql
-          
-          # Force rebuild of better-sqlite3 to compile native bindings
           pnpm rebuild better-sqlite3
-          
-          # Verify installation
-          echo "✅ Checking better-sqlite3 installation..."
-          if find node_modules -name "better_sqlite3.node" 2>/dev/null | grep -q .; then
-            echo "✅ better-sqlite3 binary found"
-            find node_modules -name "better_sqlite3.node" 2>/dev/null | head -3
-          else
-            echo "⚠️ better-sqlite3 binary not found, attempting manual rebuild..."
-            cd node_modules/better-sqlite3
-            npm run build-release
-            cd ../..
-          fi
-        shell: bash
 
-      - name: Install sqlcmd for SQL Server
+      - name: Setup SQL Server tools
         run: |
           curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
           curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
           sudo apt-get update
           sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
           echo '/opt/mssql-tools18/bin' >> $GITHUB_PATH
-        shell: bash
 
-      - name: Wait for SQL Server and create database
+      - name: Initialize SQL Server
         run: |
-          echo "⏳ Waiting for SQL Server to be ready (up to 5 minutes)..."
-          
-          MAX_WAIT=300
-          INTERVAL=5
-          ELAPSED=0
-          
-          while [ $ELAPSED -lt $MAX_WAIT ]; do
-            echo "Checking SQL Server connectivity... ($ELAPSED/$MAX_WAIT seconds)"
-            
+          for i in {1..60}; do
             if sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "SELECT 1" &>/dev/null; then
-              echo "✅ SQL Server is ready after $ELAPSED seconds!"
-              echo "Creating database mirror_test..."
               sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "CREATE DATABASE mirror_test"
-              echo "✅ Database created successfully"
               exit 0
             fi
-            
-            echo "   SQL Server not ready yet, waiting $INTERVAL seconds..."
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
+            sleep 5
           done
-          
-          echo "❌ SQL Server failed to become ready after $MAX_WAIT seconds"
-          echo ""
-          echo "=== Docker container status ==="
-          docker ps -a
-          echo ""
-          echo "=== SQL Server container logs (last 50 lines) ==="
-          docker logs --tail 50 $(docker ps -q --filter "ancestor=mcr.microsoft.com/mssql/server:2022-latest")
           exit 1
         shell: bash
 
@@ -196,11 +148,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
         with:
           version: 10.31.0
-
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc

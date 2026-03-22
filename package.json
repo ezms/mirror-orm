@@ -42,6 +42,10 @@
         "multi-dialect"
     ],
     "author": "Emanuel Martins <emanuelm.dev@gmail.com>",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ezms/mirror-orm"
+    },
     "license": "Apache-2.0",
     "packageManager": "pnpm@10.31.0",
     "dependencies": {

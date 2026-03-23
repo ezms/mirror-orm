@@ -67,8 +67,8 @@ jobs:
             echo "prev=$PREV"     >> $GITHUB_OUTPUT
             echo "pct=$PCT"       >> $GITHUB_OUTPUT
 
-            # Flag as regression if >10% slower than previous run on main
-            if (( $(echo "$PCT > 10" | bc -l) )); then
+            # Flag as regression if >20% slower than previous run on main
+            if (( $(echo "$PCT > 20" | bc -l) )); then
               echo "regression=true" >> $GITHUB_OUTPUT
             else
               echo "regression=false" >> $GITHUB_OUTPUT

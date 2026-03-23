@@ -46,6 +46,7 @@
         "type": "git",
         "url": "https://github.com/ezms/mirror-orm"
     },
+    "homepage": "https://doc-mirror-orm.vercel.app/",
     "license": "Apache-2.0",
     "packageManager": "pnpm@10.31.0",
     "dependencies": {

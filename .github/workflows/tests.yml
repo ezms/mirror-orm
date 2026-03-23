@@ -115,7 +115,10 @@ jobs:
         run: pnpm add -D pg better-sqlite3 mysql2 mssql
 
       - name: Rebuild better-sqlite3 native bindings
-        run: pnpm rebuild better-sqlite3
+        run: |
+          PKG=$(node -e "process.stdout.write(require.resolve('better-sqlite3/package.json').replace('/package.json',''))")
+          cd "$PKG"
+          npx --yes node-gyp rebuild
 
       - name: Setup SQL Server tools
         run: |

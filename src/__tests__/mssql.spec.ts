@@ -30,11 +30,15 @@ void MsUser;
 void MsProduct;
 
 const DB_CONFIG = {
-    host: '127.0.0.1',
-    port: 1433,
-    database: 'mirror_test',
-    user: 'sa',
-    password: 'Mirror_Test_2026!',
+    server: process.env.MIRROR_TEST_MSSQL_SERVER || 'localhost',
+    port: parseInt(process.env.MIRROR_TEST_MSSQL_PORT || '1433'),
+    database: process.env.MIRROR_TEST_MSSQL_DATABASE || 'mirror_test',
+    user: process.env.MIRROR_TEST_MSSQL_USER || 'SA',
+    password: process.env.MIRROR_TEST_MSSQL_PASSWORD || '',
+    options: {
+        encrypt: true,
+        trustServerCertificate: true,
+    },
 };
 
 describe('SQL Server adapter', () => {

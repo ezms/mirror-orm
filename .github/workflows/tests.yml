@@ -16,16 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
-
+          version: 10.31.0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
-
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm build
@@ -35,6 +32,7 @@ jobs:
   test:
     name: Tests & Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -67,46 +65,85 @@ jobs:
         env:
           ACCEPT_EULA: Y
           MSSQL_SA_PASSWORD: Mirror@12345
+          MSSQL_PID: Express
         ports: ['1433:1433']
         options: >-
-          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -No"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 10
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -C -b"
+          --health-interval 30s
+          --health-timeout 30s
+          --health-retries 30
 
     env:
       MIRROR_TEST_PG_URL: postgres://mirror:mirror@localhost:5432/mirror_test
+      MIRROR_TEST_PG_HOST: localhost
+      MIRROR_TEST_PG_PORT: 5432
+      MIRROR_TEST_PG_DATABASE: mirror_test
+      MIRROR_TEST_PG_USER: mirror
+      MIRROR_TEST_PG_PASSWORD: mirror
+
       MIRROR_TEST_MYSQL_URL: mysql://root:mirror@localhost:3306/mirror_test
+      MIRROR_TEST_MYSQL_HOST: localhost
+      MIRROR_TEST_MYSQL_PORT: 3306
+      MIRROR_TEST_MYSQL_DATABASE: mirror_test
+      MIRROR_TEST_MYSQL_USER: root
+      MIRROR_TEST_MYSQL_PASSWORD: mirror
+
       MIRROR_TEST_MSSQL_SERVER: localhost
+      MIRROR_TEST_MSSQL_PORT: 1433
+      MIRROR_TEST_MSSQL_DATABASE: mirror_test
       MIRROR_TEST_MSSQL_USER: SA
       MIRROR_TEST_MSSQL_PASSWORD: Mirror@12345
       MIRROR_TEST_MSSQL: "true"
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
-
+          version: 10.31.0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install
 
-      # DB drivers are peerDependencies (optional for users) but required for tests.
-      # Add them back to devDependencies if you want to avoid this step.
-      - name: Install DB drivers for tests
-        run: pnpm add pg better-sqlite3 mysql2 mssql
+      - name: Install system dependencies for native bindings
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 make g++
+
+      - name: Setup database drivers
+        run: pnpm add -D pg@8.20.0 better-sqlite3@12.8.0 mysql2@3.20.0 mssql@12.2.1
+
+      - name: Rebuild better-sqlite3 native bindings
+        run: |
+          PKG=$(node -e "process.stdout.write(require.resolve('better-sqlite3/package.json').replace('/package.json',''))")
+          cd "$PKG"
+          npx --yes node-gyp rebuild
+
+      - name: Setup SQL Server tools
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
+          echo '/opt/mssql-tools18/bin' >> $GITHUB_PATH
+
+      - name: Initialize SQL Server
+        run: |
+          for i in {1..60}; do
+            if sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "SELECT 1" &>/dev/null; then
+              sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "CREATE DATABASE mirror_test"
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+        shell: bash
 
       - name: Run tests with coverage
         run: pnpm test:coverage
 
   # ─── Benchmark (comparative) ─────────────────────────────────────────────────
-  # Runs bench:pure on the PR code and on develop, on the same runner (sequential).
-  # Hardware variability cancels out. Fails if PR is >15% slower than develop.
 
   bench:
     name: Benchmark (comparative)
@@ -116,11 +153,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: pnpm/action-setup@v4
         with:
-          version: 10
-
+          version: 10.31.0
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -132,8 +167,6 @@ jobs:
       - name: Bench PR code
         run: pnpm benchmark:pure 2>/dev/null | tee /tmp/bench-pr.txt
 
-      # Save the compare script before switching branches
-      # (it may not exist on develop if this is the first PR that adds it)
       - name: Save compare script
         run: cp .github/scripts/compare-bench.mjs /tmp/compare-bench.mjs
 

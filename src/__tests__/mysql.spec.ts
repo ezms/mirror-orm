@@ -30,11 +30,11 @@ void MyUser;
 void MyProduct;
 
 const DB_CONFIG = {
-    host: '127.0.0.1',
-    port: 3306,
-    database: 'mirror_test',
-    user: 'root',
-    password: 'root',
+    host: process.env.MIRROR_TEST_MYSQL_HOST || '127.0.0.1',
+    port: parseInt(process.env.MIRROR_TEST_MYSQL_PORT || '3306'),
+    database: process.env.MIRROR_TEST_MYSQL_DATABASE || 'mirror_test',
+    user: process.env.MIRROR_TEST_MYSQL_USER || 'root',
+    password: process.env.MIRROR_TEST_MYSQL_PASSWORD || '',
 };
 
 describe('MySQL adapter', () => {

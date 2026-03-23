@@ -89,6 +89,11 @@
         "typescript": "^5.9.3",
         "vitest": "^4.0.18"
     },
+    "pnpm": {
+        "overrides": {
+            "flatted": "^3.4.2"
+        }
+    },
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",

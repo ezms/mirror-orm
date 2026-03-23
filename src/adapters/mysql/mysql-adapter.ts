@@ -7,6 +7,7 @@ import { IDriverAdapter } from '../adapter';
 
 type SqlParams = Array<string | number | boolean | null | Buffer | bigint>;
 
+
 function resolveParams(input: string | INamedQuery, params?: Array<unknown>): SqlParams {
     if (params && params.length > 0) return params as SqlParams;
     if (typeof input === 'object' && input.values && input.values.length > 0) return input.values as SqlParams;
@@ -57,9 +58,18 @@ export class MysqlAdapter implements IDriverAdapter {
 
     public async connect(options: IConnectionOptions): Promise<void> {
         const mysql = await import('mysql2/promise');
+        const ssl = options.ssl === true ? {} : options.ssl === false ? undefined : options.ssl;
         this.pool = mysql.createPool(
             options.url
-                ? { uri: options.url, waitForConnections: true }
+                ? {
+                    uri: options.url,
+                    waitForConnections: true,
+                    timezone: '+00:00',
+                    connectionLimit: options.pool?.max,
+                    idleTimeout: options.pool?.idleTimeoutMs,
+                    connectTimeout: options.pool?.connectTimeoutMs,
+                    ...(ssl !== undefined && { ssl: ssl as object }),
+                }
                 : {
                     host: options.host,
                     port: options.port,
@@ -67,6 +77,11 @@ export class MysqlAdapter implements IDriverAdapter {
                     user: options.user,
                     password: options.password,
                     waitForConnections: true,
+                    timezone: '+00:00',
+                    connectionLimit: options.pool?.max,
+                    idleTimeout: options.pool?.idleTimeoutMs,
+                    connectTimeout: options.pool?.connectTimeoutMs,
+                    ...(ssl !== undefined && { ssl: ssl as object }),
                 },
         );
     }

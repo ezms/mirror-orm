@@ -67,7 +67,13 @@ export class PostgresAdapter implements IDriverAdapter {
         this.arrayQueryTypes = makeArrayQueryTypes(types);
         this.pool = new Pool(
             options.url
-                ? { connectionString: options.url, ssl: options.ssl }
+                ? {
+                    connectionString: options.url,
+                    ssl: options.ssl,
+                    max: options.pool?.max,
+                    idleTimeoutMillis: options.pool?.idleTimeoutMs,
+                    connectionTimeoutMillis: options.pool?.acquireTimeoutMs,
+                }
                 : {
                     host: options.host,
                     port: options.port,
@@ -75,6 +81,9 @@ export class PostgresAdapter implements IDriverAdapter {
                     user: options.user,
                     password: options.password,
                     ssl: options.ssl,
+                    max: options.pool?.max,
+                    idleTimeoutMillis: options.pool?.idleTimeoutMs,
+                    connectionTimeoutMillis: options.pool?.acquireTimeoutMs,
                 },
         );
     }

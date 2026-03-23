@@ -1,11 +1,26 @@
 import type * as MssqlNS from 'mssql';
-import { IConnectionOptions } from '../../connection/connection-options';
+import { IConnectionOptions, ISslOptions } from '../../connection/connection-options';
 import { QueryError } from '../../errors';
 import { INamedQuery } from '../../interfaces/query-runner';
 import { ITransactionRunner } from '../../interfaces/transaction-runner';
 import { IDriverAdapter } from '../adapter';
 
 type MssqlModule = typeof MssqlNS;
+
+function buildMssqlOptions(ssl: boolean | ISslOptions | undefined): MssqlNS.config['options'] {
+    if (ssl === undefined) return { trustServerCertificate: true };
+    if (ssl === false) return { encrypt: false, trustServerCertificate: false };
+    if (ssl === true) return { encrypt: true, trustServerCertificate: false };
+    return {
+        encrypt: true,
+        trustServerCertificate: ssl.rejectUnauthorized === false,
+        cryptoCredentialsDetails: {
+            ...(ssl.ca && { ca: ssl.ca }),
+            ...(ssl.cert && { cert: ssl.cert }),
+            ...(ssl.key && { key: ssl.key }),
+        },
+    };
+}
 
 function resolveParams(input: string | INamedQuery, params?: Array<unknown>): Array<unknown> {
     if (params && params.length > 0) return params;
@@ -83,7 +98,13 @@ export class MssqlAdapter implements IDriverAdapter {
                 database: options.database,
                 user: options.user,
                 password: options.password,
-                options: { trustServerCertificate: true },
+                connectionTimeout: options.pool?.connectTimeoutMs,
+                options: buildMssqlOptions(options.ssl),
+                pool: {
+                    max: options.pool?.max,
+                    idleTimeoutMillis: options.pool?.idleTimeoutMs,
+                    acquireTimeoutMillis: options.pool?.acquireTimeoutMs,
+                },
             };
         this.pool = await new this.sql.ConnectionPool(config).connect();
     }

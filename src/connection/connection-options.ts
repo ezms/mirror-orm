@@ -9,6 +9,17 @@ export interface ISslOptions {
     key?: string;
 }
 
+export interface IPoolOptions {
+    /** Maximum number of connections in the pool. Default varies by driver (usually 10). */
+    max?: number;
+    /** How long (ms) an idle connection stays open before being released. */
+    idleTimeoutMs?: number;
+    /** How long (ms) to wait for an available connection from the pool before throwing. */
+    acquireTimeoutMs?: number;
+    /** TCP connection timeout (ms). Applied during initial handshake with the database server. */
+    connectTimeoutMs?: number;
+}
+
 export type IReplicaConfig = {
     url?: string;
     host?: string;
@@ -17,6 +28,7 @@ export type IReplicaConfig = {
     user?: string;
     password?: string;
     ssl?: boolean | ISslOptions;
+    pool?: IPoolOptions;
 };
 
 export interface IConnectionOptions {
@@ -30,6 +42,7 @@ export interface IConnectionOptions {
     user?: string;
     password?: string;
     ssl?: boolean | ISslOptions;
+    pool?: IPoolOptions;
     logger?: ILogger;
 }
 

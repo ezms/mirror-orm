@@ -112,9 +112,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 make g++
 
       - name: Setup database drivers
-        run: |
-          pnpm add -D pg better-sqlite3 mysql2 mssql
-          pnpm rebuild better-sqlite3
+        env:
+          npm_config_build_from_source: 'true'
+        run: pnpm add -D pg better-sqlite3 mysql2 mssql
 
       - name: Setup SQL Server tools
         run: |

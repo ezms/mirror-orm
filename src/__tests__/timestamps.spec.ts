@@ -147,8 +147,7 @@ describe('@CreatedAt / @UpdatedAt / @DeletedAt — bare syntax', () => {
 
         const update = runner.calls.find(
             (c) =>
-                c.sql.includes('ts_articles_bare') &&
-                c.sql.includes('UPDATE'),
+                c.sql.includes('ts_articles_bare') && c.sql.includes('UPDATE'),
         );
         expect(update).toBeDefined();
         expect(update!.sql).toContain('deleted_at');

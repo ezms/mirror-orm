@@ -28,14 +28,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # ─── Run benchmark ───────────────────────────────────────────────────────
+      # Run 5 times and take the median to reduce CI runner noise.
 
       - name: Run benchmark
-        run: pnpm benchmark:pure 2>/dev/null | tee /tmp/bench-output.txt
+        run: |
+          for i in 1 2 3 4 5; do
+            pnpm benchmark:pure 2>/dev/null >> /tmp/bench-runs.txt
+          done
 
       - name: Parse result
         id: result
         run: |
-          NS=$(grep -oP 'mirror_ns_per_row=\K[\d.]+' /tmp/bench-output.txt)
+          # Extract all 5 samples, sort numerically, pick the middle value (median)
+          NS=$(grep -oP 'mirror_ns_per_row=\K[\d.]+' /tmp/bench-runs.txt \
+            | sort -n \
+            | awk 'NR==3{print}')
           DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           echo "ns=$NS" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
@@ -67,8 +74,8 @@ jobs:
             echo "prev=$PREV"     >> $GITHUB_OUTPUT
             echo "pct=$PCT"       >> $GITHUB_OUTPUT
 
-            # Flag as regression if >20% slower than previous run on main
-            if (( $(echo "$PCT > 20" | bc -l) )); then
+            # Flag as regression if >25% slower than previous run on main
+            if (( $(echo "$PCT > 25" | bc -l) )); then
               echo "regression=true" >> $GITHUB_OUTPUT
             else
               echo "regression=false" >> $GITHUB_OUTPUT

@@ -40,6 +40,50 @@ class TsArticle {
     deletedAt!: Date | null;
 }
 
+// Bare syntax (no parentheses)
+@Entity('ts_posts_bare')
+class TsPostBare {
+    @PrimaryColumn({ strategy: 'uuid_v4' })
+    id!: string;
+
+    @Column()
+    title!: string;
+
+    @CreatedAt
+    createdAt!: Date;
+
+    @UpdatedAt
+    updatedAt!: Date;
+}
+
+@Entity('ts_articles_bare')
+class TsArticleBare {
+    @PrimaryColumn({ strategy: 'uuid_v4' })
+    id!: string;
+
+    @Column()
+    title!: string;
+
+    @DeletedAt
+    deletedAt!: Date | null;
+}
+
+// Custom db name
+@Entity('ts_posts_custom')
+class TsPostCustom {
+    @PrimaryColumn({ strategy: 'uuid_v4' })
+    id!: string;
+
+    @Column()
+    title!: string;
+
+    @CreatedAt('criado_em')
+    createdAt!: Date;
+
+    @UpdatedAt('atualizado_em')
+    updatedAt!: Date;
+}
+
 // ─── Mock runner ──────────────────────────────────────────────────────────────
 
 function makeRunner() {
@@ -72,6 +116,60 @@ function makeRepo<T>(cls: new () => T, runner: ReturnType<typeof makeRunner>) {
     const meta = registry.getEntity(cls.name)!;
     return new Repository(cls, runner as unknown as IQueryRunner, meta);
 }
+
+// ─── bare syntax ──────────────────────────────────────────────────────────────
+
+describe('@CreatedAt / @UpdatedAt / @DeletedAt — bare syntax', () => {
+    it('bare @CreatedAt and @UpdatedAt use default column names on INSERT', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(TsPostBare, runner);
+
+        const post = Object.assign(new TsPostBare(), { title: 'Bare' });
+        await repo.save(post);
+
+        const insert = runner.calls.find(
+            (c) => c.sql.includes('ts_posts_bare') && c.sql.includes('INSERT'),
+        );
+        expect(insert).toBeDefined();
+        expect(insert!.sql).toContain('created_at');
+        expect(insert!.sql).toContain('updated_at');
+    });
+
+    it('bare @DeletedAt uses default column name on soft delete', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(TsArticleBare, runner);
+
+        const article = Object.assign(new TsArticleBare(), {
+            id: 'article-bare',
+            title: 'Gone',
+        });
+        await repo.remove(article);
+
+        const update = runner.calls.find(
+            (c) =>
+                c.sql.includes('ts_articles_bare') &&
+                c.sql.includes('UPDATE'),
+        );
+        expect(update).toBeDefined();
+        expect(update!.sql).toContain('deleted_at');
+    });
+
+    it('custom db names are used when provided', async () => {
+        const runner = makeRunner();
+        const repo = makeRepo(TsPostCustom, runner);
+
+        const post = Object.assign(new TsPostCustom(), { title: 'Custom' });
+        await repo.save(post);
+
+        const insert = runner.calls.find(
+            (c) =>
+                c.sql.includes('ts_posts_custom') && c.sql.includes('INSERT'),
+        );
+        expect(insert).toBeDefined();
+        expect(insert!.sql).toContain('criado_em');
+        expect(insert!.sql).toContain('atualizado_em');
+    });
+});
 
 // ─── @CreatedAt / @UpdatedAt ──────────────────────────────────────────────────
 

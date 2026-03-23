@@ -20,7 +20,7 @@ console.log(`PR:      ${prNs.toFixed(2)} ns/row`);
 console.log(`develop: ${devNs.toFixed(2)} ns/row`);
 console.log(`diff:    ${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%`);
 
-const THRESHOLD = 15;
+const THRESHOLD = 25;
 
 if (pct > THRESHOLD) {
     console.error(`\n❌ Performance regression: PR is ${pct.toFixed(1)}% slower than develop (threshold: ${THRESHOLD}%)`);

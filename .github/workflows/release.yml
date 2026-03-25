@@ -64,3 +64,15 @@ jobs:
 
       - name: Push tags
         run: git push --follow-tags
+
+      # ─── GitHub Release ───────────────────────────────────────────────────────
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release create "mirror-orm@${VERSION}" \
+            --title "v${VERSION}" \
+            --generate-notes \
+            --verify-tag

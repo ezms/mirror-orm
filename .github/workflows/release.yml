@@ -74,5 +74,4 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           gh release create "mirror-orm@${VERSION}" \
             --title "v${VERSION}" \
-            --generate-notes \
-            --verify-tag
+            --generate-notes

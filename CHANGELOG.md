@@ -1,5 +1,11 @@
 # mirror-orm
 
+## 1.0.4
+
+### Patch Changes
+
+- 4195eba: Fix count() and exists() for MySQL/SQL Server, and ManyToOne JOIN quoting
+
 ## 1.0.3
 
 ### Patch Changes

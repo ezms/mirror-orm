@@ -118,7 +118,7 @@ export class SqlAssembler<T> {
             const relPk = relatedState.columnMap.get(
                 relatedState.cachedPrimaryColumn!.propertyKey,
             )!;
-            sql += ` LEFT JOIN ${relatedState.quotedTableName} ON ${this.state.quotedTableName}."${relation.foreignKey}" = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName}`;
+            sql += ` LEFT JOIN ${relatedState.quotedTableName} ON ${this.state.quotedTableName}.${this.state.quoteIdentifier(relation.foreignKey)} = ${relatedState.quotedTableName}.${relPk.quotedDatabaseName}`;
         }
 
         let whereSql = this.buildWhere(options.where, params);
@@ -196,7 +196,7 @@ export class SqlAssembler<T> {
             whereSql += whereSql ? ` AND ${sdClause}` : ` WHERE ${sdClause}`;
         }
         return {
-            sql: `SELECT COUNT(*) FROM ${this.state.quotedTableName}${whereSql}`,
+            sql: `SELECT COUNT(*) AS count FROM ${this.state.quotedTableName}${whereSql}`,
             params,
         };
     }

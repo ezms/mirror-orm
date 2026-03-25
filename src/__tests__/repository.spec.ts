@@ -209,7 +209,7 @@ describe('Repository<UserFixture> (identity PK)', () => {
             const result = await repo.count();
 
             expect(mockQuery).toHaveBeenCalledWith(
-                'SELECT COUNT(*) FROM "users"',
+                'SELECT COUNT(*) AS count FROM "users"',
                 [],
             );
             expect(result).toBe(42);

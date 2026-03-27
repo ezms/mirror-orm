@@ -65,6 +65,9 @@ export class PostgresAdapter implements IDriverAdapter {
     public async connect(options: IConnectionOptions): Promise<void> {
         const { Pool, types } = await import('pg');
         this.arrayQueryTypes = makeArrayQueryTypes(types);
+        const statementTimeout = options.pool?.queryTimeoutMs !== undefined
+            ? `-c statement_timeout=${options.pool.queryTimeoutMs}`
+            : undefined;
         this.pool = new Pool(
             options.url
                 ? {
@@ -73,6 +76,7 @@ export class PostgresAdapter implements IDriverAdapter {
                     max: options.pool?.max,
                     idleTimeoutMillis: options.pool?.idleTimeoutMs,
                     connectionTimeoutMillis: options.pool?.acquireTimeoutMs,
+                    ...(statementTimeout !== undefined && { options: statementTimeout }),
                 }
                 : {
                     host: options.host,
@@ -84,6 +88,7 @@ export class PostgresAdapter implements IDriverAdapter {
                     max: options.pool?.max,
                     idleTimeoutMillis: options.pool?.idleTimeoutMs,
                     connectionTimeoutMillis: options.pool?.acquireTimeoutMs,
+                    ...(statementTimeout !== undefined && { options: statementTimeout }),
                 },
         );
     }

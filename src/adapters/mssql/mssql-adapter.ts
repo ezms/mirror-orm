@@ -99,6 +99,7 @@ export class MssqlAdapter implements IDriverAdapter {
                 user: options.user,
                 password: options.password,
                 connectionTimeout: options.pool?.connectTimeoutMs,
+                requestTimeout: options.pool?.queryTimeoutMs,
                 options: buildMssqlOptions(options.ssl),
                 pool: {
                     max: options.pool?.max,

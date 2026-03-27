@@ -18,6 +18,8 @@ export interface IPoolOptions {
     acquireTimeoutMs?: number;
     /** TCP connection timeout (ms). Applied during initial handshake with the database server. */
     connectTimeoutMs?: number;
+    /** Maximum time (ms) a single query is allowed to run before being cancelled by the server. */
+    queryTimeoutMs?: number;
 }
 
 export type IReplicaConfig = {

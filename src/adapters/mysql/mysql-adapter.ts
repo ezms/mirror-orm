@@ -15,13 +15,16 @@ function resolveParams(input: string | INamedQuery, params?: Array<unknown>): Sq
 }
 
 class MysqlTransactionRunner implements ITransactionRunner {
-    constructor(private readonly conn: PoolConnection) {}
+    constructor(
+        private readonly conn: PoolConnection,
+        private readonly queryTimeoutMs: number | undefined,
+    ) {}
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {
         const sql = typeof input === 'string' ? input : input.text;
         const p = resolveParams(input, params);
         try {
-            const [rows] = await this.conn.execute(sql, p);
+            const [rows] = await this.conn.execute({ sql, ...(p.length > 0 && { values: p }), ...(this.queryTimeoutMs !== undefined && { timeout: this.queryTimeoutMs }) });
             return rows as Array<T>;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -33,7 +36,7 @@ class MysqlTransactionRunner implements ITransactionRunner {
         const p = resolveParams(input, params);
         try {
             const [rows] = await (this.conn as unknown as { query(opts: object): Promise<[Array<T>, unknown]> })
-                .query({ sql, rowsAsArray: true, values: p });
+                .query({ sql, rowsAsArray: true, values: p, ...(this.queryTimeoutMs !== undefined && { timeout: this.queryTimeoutMs }) });
             return rows;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -55,8 +58,10 @@ class MysqlTransactionRunner implements ITransactionRunner {
 
 export class MysqlAdapter implements IDriverAdapter {
     private pool: Pool | null = null;
+    private queryTimeoutMs: number | undefined;
 
     public async connect(options: IConnectionOptions): Promise<void> {
+        this.queryTimeoutMs = options.pool?.queryTimeoutMs;
         const mysql = await import('mysql2/promise');
         const ssl = options.ssl === true ? {} : options.ssl === false ? undefined : options.ssl;
         this.pool = mysql.createPool(
@@ -91,7 +96,7 @@ export class MysqlAdapter implements IDriverAdapter {
         const sql = typeof input === 'string' ? input : input.text;
         const p = resolveParams(input, params);
         try {
-            const [rows] = await this.pool.execute(sql, p);
+            const [rows] = await this.pool.execute({ sql, ...(p.length > 0 && { values: p }), ...(this.queryTimeoutMs !== undefined && { timeout: this.queryTimeoutMs }) });
             return rows as Array<T>;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -104,7 +109,7 @@ export class MysqlAdapter implements IDriverAdapter {
         const p = resolveParams(input, params);
         try {
             const [rows] = await (this.pool as unknown as { query(opts: object): Promise<[Array<T>, unknown]> })
-                .query({ sql, rowsAsArray: true, values: p });
+                .query({ sql, rowsAsArray: true, values: p, ...(this.queryTimeoutMs !== undefined && { timeout: this.queryTimeoutMs }) });
             return rows;
         } catch (error) {
             throw new QueryError(sql, error);
@@ -131,7 +136,7 @@ export class MysqlAdapter implements IDriverAdapter {
         if (!this.pool) throw new Error('Not connected');
         const conn = await this.pool.getConnection();
         await conn.beginTransaction();
-        return new MysqlTransactionRunner(conn);
+        return new MysqlTransactionRunner(conn, this.queryTimeoutMs);
     }
 
     public async disconnect(): Promise<void> {

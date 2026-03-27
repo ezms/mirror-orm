@@ -103,9 +103,9 @@ export class MssqlAdapter implements IDriverAdapter {
                 requestTimeout: options.pool?.queryTimeoutMs,
                 options: buildMssqlOptions(options.ssl),
                 pool: {
-                    max: options.pool?.max,
-                    idleTimeoutMillis: options.pool?.idleTimeoutMs,
-                    acquireTimeoutMillis: options.pool?.acquireTimeoutMs,
+                    ...(options.pool?.max !== undefined && { max: options.pool.max }),
+                    ...(options.pool?.idleTimeoutMs !== undefined && { idleTimeoutMillis: options.pool.idleTimeoutMs }),
+                    ...(options.pool?.acquireTimeoutMs !== undefined && { acquireTimeoutMillis: options.pool.acquireTimeoutMs }),
                 },
             };
         this.pool = await new this.sql.ConnectionPool(config).connect();

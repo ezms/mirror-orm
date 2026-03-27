@@ -91,6 +91,9 @@ export class PostgresAdapter implements IDriverAdapter {
                     ...(statementTimeout !== undefined && { options: statementTimeout }),
                 },
         );
+        if (options.onPoolError) {
+            this.pool.on('error', options.onPoolError);
+        }
     }
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {

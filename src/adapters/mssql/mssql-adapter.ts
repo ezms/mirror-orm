@@ -108,6 +108,9 @@ export class MssqlAdapter implements IDriverAdapter {
                 },
             };
         this.pool = await new this.sql.ConnectionPool(config).connect();
+        if (options.onPoolError) {
+            this.pool.on('error', options.onPoolError);
+        }
     }
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {

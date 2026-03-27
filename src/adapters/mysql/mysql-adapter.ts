@@ -89,6 +89,9 @@ export class MysqlAdapter implements IDriverAdapter {
                     ...(ssl !== undefined && { ssl: ssl as object }),
                 },
         );
+        if (options.onPoolError) {
+            (this.pool as unknown as { on(event: string, listener: (err: Error) => void): void }).on('error', options.onPoolError);
+        }
     }
 
     public async query<T = unknown>(input: string | INamedQuery, params?: Array<unknown>): Promise<Array<T>> {

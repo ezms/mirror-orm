@@ -46,6 +46,7 @@ export interface IConnectionOptions {
     ssl?: boolean | ISslOptions;
     pool?: IPoolOptions;
     logger?: ILogger;
+    onPoolError?: (error: Error) => void;
 }
 
 export type IConnectionConfig = Omit<

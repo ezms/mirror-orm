@@ -23,6 +23,7 @@ import { transactionStore } from '../context/transaction-store';
 import {
     AccountFixture,
     AuthorFixture,
+    BinaryFixture,
     BookFixture,
     PostFixture,
     UserFixture,
@@ -34,6 +35,7 @@ void PostFixture;
 void AccountFixture;
 void AuthorFixture;
 void BookFixture;
+void BinaryFixture;
 
 describe('Repository<UserFixture> (identity PK)', () => {
     let mockQuery: Mock;
@@ -1455,5 +1457,62 @@ describe('QueryError.verbose', () => {
         expect(err.query).toBe('SELECT 1');
         expect(err.params).toEqual([7]);
         expect(err.originalError).toBeInstanceOf(Error);
+    });
+});
+
+// ─── Type casting — json and buffer ─────────────────────────────────────────
+
+describe('Repository<BinaryFixture> — type casting: json and buffer', () => {
+    let mockQuery: Mock;
+    let repo: Repository<BinaryFixture>;
+
+    beforeEach(() => {
+        const metadata = registry.getEntity('BinaryFixture')!;
+        mockQuery = vi.fn();
+        repo = new Repository(BinaryFixture, { query: mockQuery }, metadata);
+    });
+
+    // json — string input (MySQL / SQLite / SQL Server)
+    it('parses JSON string into object for type: json', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: '{"key":"value"}', data: Buffer.alloc(0) }]);
+        const result = await repo.findAll();
+        expect(result[0].payload).toEqual({ key: 'value' });
+    });
+
+    // json — already-parsed object (Postgres via getTypeParser)
+    it('returns already-parsed object as-is for type: json', async () => {
+        const obj = { key: 'value' };
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: obj, data: Buffer.alloc(0) }]);
+        const result = await repo.findAll();
+        expect(result[0].payload).toBe(obj);
+    });
+
+    it('returns null for null json column', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: Buffer.alloc(0) }]);
+        const result = await repo.findAll();
+        expect(result[0].payload).toBeNull();
+    });
+
+    // buffer — already a Buffer (all drivers for binary columns)
+    it('returns Buffer as-is for type: buffer', async () => {
+        const buf = Buffer.from([1, 2, 3]);
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: buf }]);
+        const result = await repo.findAll();
+        expect(result[0].data).toBe(buf);
+        expect(Buffer.isBuffer(result[0].data)).toBe(true);
+    });
+
+    // buffer — non-Buffer input (edge case)
+    it('converts non-Buffer value to Buffer for type: buffer', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: [1, 2, 3] }]);
+        const result = await repo.findAll();
+        expect(Buffer.isBuffer(result[0].data)).toBe(true);
+        expect(Array.from(result[0].data)).toEqual([1, 2, 3]);
+    });
+
+    it('returns null for null buffer column', async () => {
+        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: null }]);
+        const result = await repo.findAll();
+        expect(result[0].data).toBeNull();
     });
 });

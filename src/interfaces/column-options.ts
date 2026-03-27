@@ -5,7 +5,9 @@ export type ColumnType =
     | 'datetime'
     | 'date'
     | 'iso'
-    | 'string';
+    | 'string'
+    | 'json'
+    | 'buffer';
 
 export interface IColumnOptions {
     name?: string;

@@ -368,6 +368,10 @@ export class RepositoryState<T> {
                 return `${v}!==null?H.dateOnly(${v}):null`;
             case 'iso':
                 return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            case 'json':
+                return `${v}!==null?(typeof ${v}==='string'?JSON.parse(${v}):${v}):null`;
+            case 'buffer':
+                return `${v}!==null?(Buffer.isBuffer(${v})?${v}:Buffer.from(${v})):null`;
             default:
                 return v;
         }
@@ -433,6 +437,10 @@ export class RepositoryState<T> {
                 return `${v}!==null?H.dateOnly(${v}):null`;
             case 'iso':
                 return `${v}!==null?(${v} instanceof Date?${v}:new Date(${v})).toISOString():null`;
+            case 'json':
+                return `${v}!==null?(typeof ${v}==='string'?JSON.parse(${v}):${v}):null`;
+            case 'buffer':
+                return `${v}!==null?(Buffer.isBuffer(${v})?${v}:Buffer.from(${v})):null`;
             default:
                 return v;
         }

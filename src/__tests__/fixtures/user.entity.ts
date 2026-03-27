@@ -45,6 +45,18 @@ export class AccountFixture {
     label!: string;
 }
 
+@Entity('binary_fixtures')
+export class BinaryFixture {
+    @PrimaryColumn({ strategy: 'identity' })
+    id!: number;
+
+    @Column({ name: 'payload', type: 'json' })
+    payload!: unknown;
+
+    @Column({ name: 'data', type: 'buffer' })
+    data!: Buffer;
+}
+
 @Entity('authors')
 export class AuthorFixture {
     @PrimaryColumn({ strategy: 'identity' })

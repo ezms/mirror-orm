@@ -220,6 +220,18 @@ export class Connection {
         await this.options.replicaAdapter?.disconnect();
     }
 
+    public async healthCheck(): Promise<boolean> {
+        try {
+            await this.options.adapter.query('SELECT 1');
+            if (this.options.replicaAdapter) {
+                await this.options.replicaAdapter.query('SELECT 1');
+            }
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     private getOrCompile<T>(target: new () => T): RepositoryState<T> {
         const key = target.name;
         if (this.repoCache.has(key)) {

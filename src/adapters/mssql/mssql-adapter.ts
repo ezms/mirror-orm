@@ -89,7 +89,8 @@ export class MssqlAdapter implements IDriverAdapter {
     private sql: MssqlModule | null = null;
 
     public async connect(options: IConnectionOptions): Promise<void> {
-        this.sql = await import('mssql');
+        const mod = await import('mssql');
+        this.sql = ((mod as unknown as { default: MssqlModule }).default ?? mod) as MssqlModule;
         const config: MssqlNS.config = options.url
             ? { server: options.url } as MssqlNS.config
             : {

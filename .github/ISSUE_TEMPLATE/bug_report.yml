@@ -1,0 +1,62 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Mirror ORM.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > For questions and usage help, please use [GitHub Discussions](https://github.com/ezms/mirror-orm/discussions) instead.
+
+  - type: input
+    id: version
+    attributes:
+      label: Mirror ORM version
+      placeholder: e.g. 1.0.4
+    validations:
+      required: true
+
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Affected adapter(s)
+      multiple: true
+      options:
+        - PostgreSQL
+        - MySQL
+        - SQLite
+        - SQL Server
+        - All
+    validations:
+      required: true
+
+  - type: input
+    id: node_version
+    attributes:
+      label: Node.js version
+      placeholder: e.g. 22.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What happened? What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: A minimal code snippet or repository that reproduces the issue.
+      render: typescript
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error output
+      description: Paste any error messages or stack traces here.
+      render: shell

@@ -1,0 +1,48 @@
+name: Feature Request
+description: Suggest a new feature or improvement for Mirror ORM.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > For general discussion about ideas, please use [GitHub Discussions](https://github.com/ezms/mirror-orm/discussions) instead.
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: What problem does this solve? What use case does it enable?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API or behavior
+      description: How would you expect this to work? Include a code example if applicable.
+      render: typescript
+
+  - type: dropdown
+    id: adapters
+    attributes:
+      label: Affected adapter(s)
+      multiple: true
+      options:
+        - PostgreSQL
+        - MySQL
+        - SQLite
+        - SQL Server
+        - All
+    validations:
+      required: true
+
+  - type: dropdown
+    id: breaking
+    attributes:
+      label: Would this be a breaking change?
+      options:
+        - "No"
+        - "Yes"
+        - "Not sure"
+    validations:
+      required: true

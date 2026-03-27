@@ -15,6 +15,9 @@
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
         "benchmark:pure": "tsx benchmark/pure.ts",
+        "benchmark:integration:pg": "tsx benchmark/integration-pg.ts",
+        "benchmark:integration:mysql": "tsx benchmark/integration-mysql.ts",
+        "benchmark:integration:mssql": "tsx benchmark/integration-mssql.ts",
         "changeset": "changeset",
         "version": "changeset version",
         "release": "pnpm build && changeset publish"

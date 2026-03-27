@@ -219,3 +219,168 @@ jobs:
               ].join('\n'),
               labels: ['performance', 'bug'],
             });
+
+  # ─── Integration benchmark ───────────────────────────────────────────────────
+
+  bench-integration:
+    name: Benchmark — Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: mirror
+          POSTGRES_PASSWORD: mirror
+          POSTGRES_DB: mirror_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: mirror
+          MYSQL_DATABASE: mirror_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd "mysqladmin ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: Mirror@12345
+          MSSQL_PID: Express
+        ports: ['1433:1433']
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'Mirror@12345' -Q 'SELECT 1' -C -b"
+          --health-interval 30s
+          --health-timeout 30s
+          --health-retries 30
+
+    env:
+      MIRROR_TEST_PG_HOST: localhost
+      MIRROR_TEST_PG_PORT: 5432
+      MIRROR_TEST_PG_DATABASE: mirror_test
+      MIRROR_TEST_PG_USER: mirror
+      MIRROR_TEST_PG_PASSWORD: mirror
+      MIRROR_TEST_MYSQL_HOST: localhost
+      MIRROR_TEST_MYSQL_PORT: 3306
+      MIRROR_TEST_MYSQL_DATABASE: mirror_test
+      MIRROR_TEST_MYSQL_USER: root
+      MIRROR_TEST_MYSQL_PASSWORD: mirror
+      MIRROR_TEST_MSSQL_SERVER: localhost
+      MIRROR_TEST_MSSQL_PORT: 1433
+      MIRROR_TEST_MSSQL_DATABASE: mirror_test
+      MIRROR_TEST_MSSQL_USER: SA
+      MIRROR_TEST_MSSQL_PASSWORD: Mirror@12345
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Setup database drivers
+        run: pnpm add -D pg@8.20.0 mysql2@3.20.0 mssql@12.2.1
+
+      - name: Setup SQL Server tools and database
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update && sudo ACCEPT_EULA=Y apt-get install -y mssql-tools18
+          echo '/opt/mssql-tools18/bin' >> $GITHUB_PATH
+          for i in {1..60}; do
+            if sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "SELECT 1" &>/dev/null; then
+              sqlcmd -S localhost -U SA -P "Mirror@12345" -C -Q "CREATE DATABASE mirror_test"
+              break
+            fi
+            sleep 5
+          done
+
+      # ─── Run benchmarks ───────────────────────────────────────────────────────
+
+      - name: Benchmark — PostgreSQL
+        run: pnpm benchmark:integration:pg 2>/dev/null | tee /tmp/bench-pg.txt
+
+      - name: Benchmark — MySQL
+        run: pnpm benchmark:integration:mysql 2>/dev/null | tee /tmp/bench-mysql.txt
+
+      - name: Benchmark — SQL Server
+        run: pnpm benchmark:integration:mssql 2>/dev/null | tee /tmp/bench-mssql.txt
+
+      # ─── Parse and compare results ────────────────────────────────────────────
+
+      - name: Parse results
+        id: result
+        run: |
+          PG=$(grep -oP 'mirror_pg_p50=\K[\d.]+' /tmp/bench-pg.txt)
+          MYSQL=$(grep -oP 'mirror_mysql_p50=\K[\d.]+' /tmp/bench-mysql.txt)
+          MSSQL=$(grep -oP 'mirror_mssql_p50=\K[\d.]+' /tmp/bench-mssql.txt)
+          DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          echo "pg=$PG"       >> $GITHUB_OUTPUT
+          echo "mysql=$MYSQL" >> $GITHUB_OUTPUT
+          echo "mssql=$MSSQL" >> $GITHUB_OUTPUT
+          printf '{"pg":%s,"mysql":%s,"mssql":%s,"sha":"%s","date":"%s"}\n' \
+            "$PG" "$MYSQL" "$MSSQL" "${{ github.sha }}" "$DATE" > /tmp/bench-integ-result.json
+
+      - name: Download previous integration result
+        id: download
+        uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          workflow: benchmark.yml
+          name: benchmark-integration-result
+          path: /tmp/prev-integ
+
+      - name: Compare with previous
+        run: |
+          PREV_FILE="/tmp/prev-integ/bench-integ-result.json"
+          if [ ! -f "$PREV_FILE" ]; then
+            echo "No previous integration benchmark — skipping comparison."
+            exit 0
+          fi
+
+          THRESHOLD=30
+          REGRESSION=false
+
+          for DB in pg mysql mssql; do
+            CURR=$(jq -r ".${DB}" /tmp/bench-integ-result.json)
+            PREV=$(jq -r ".${DB}" "$PREV_FILE")
+            PCT=$(node -e "process.stdout.write((($CURR-$PREV)/$PREV*100).toFixed(1))")
+            SIGN=$(echo "$PCT >= 0" | bc -l | grep -q 1 && echo "+" || echo "")
+            echo "${DB}: ${CURR}ms (prev ${PREV}ms, ${SIGN}${PCT}%)"
+            if (( $(echo "$PCT > $THRESHOLD" | bc -l) )); then
+              echo "::warning::Integration regression on ${DB}: +${PCT}% (threshold ${THRESHOLD}%)"
+              REGRESSION=true
+            fi
+          done
+
+          if [ "$REGRESSION" = "true" ]; then
+            echo "::error::Integration benchmark regression detected — see warnings above."
+            exit 1
+          fi
+
+      - name: Upload integration result
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-integration-result
+          path: /tmp/bench-integ-result.json
+          overwrite: true
+          retention-days: 365

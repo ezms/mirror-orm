@@ -1,4 +1,5 @@
-export { IQueryOperator, isOperator } from './query-operator';
+export type { IQueryOperator } from './query-operator';
+export { isOperator } from './query-operator';
 export {
     MoreThan,
     MoreThanOrEqual,

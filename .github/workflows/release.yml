@@ -72,6 +72,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
+          node -e "
+            const fs = require('fs');
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            const start = changelog.indexOf('## ' + process.env.VERSION);
+            if (start === -1) process.exit(1);
+            const after = changelog.indexOf('\n## ', start + 1);
+            const block = after === -1 ? changelog.slice(start) : changelog.slice(start, after);
+            fs.writeFileSync('/tmp/release-notes.md', block.trim());
+          " VERSION="$VERSION"
           gh release create "mirror-orm@${VERSION}" \
             --title "v${VERSION}" \
-            --generate-notes
+            --notes-file /tmp/release-notes.md

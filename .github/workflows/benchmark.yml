@@ -319,13 +319,19 @@ jobs:
       # ─── Run benchmarks ───────────────────────────────────────────────────────
 
       - name: Benchmark — PostgreSQL
-        run: pnpm benchmark:integration:pg 2>/dev/null | tee /tmp/bench-pg.txt
+        run: |
+          set -o pipefail
+          pnpm benchmark:integration:pg | tee /tmp/bench-pg.txt
 
       - name: Benchmark — MySQL
-        run: pnpm benchmark:integration:mysql 2>/dev/null | tee /tmp/bench-mysql.txt
+        run: |
+          set -o pipefail
+          pnpm benchmark:integration:mysql | tee /tmp/bench-mysql.txt
 
       - name: Benchmark — SQL Server
-        run: pnpm benchmark:integration:mssql 2>/dev/null | tee /tmp/bench-mssql.txt
+        run: |
+          set -o pipefail
+          pnpm benchmark:integration:mssql | tee /tmp/bench-mssql.txt
 
       # ─── Parse and compare results ────────────────────────────────────────────
 

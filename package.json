@@ -1,5 +1,5 @@
 {
-    "name": "mirror-orm",
+    "name": "@mirror-community/mirror-orm",
     "version": "1.0.4",
     "description": "Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server using Stage 3 decorators",
     "main": "dist/index.js",

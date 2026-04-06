@@ -2,8 +2,8 @@
 
 Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server, built on [Stage 3 decorators](https://github.com/tc39/proposal-decorators).
 
-[![npm](https://img.shields.io/npm/v/mirror-orm)](https://www.npmjs.com/package/mirror-orm)
-[![license](https://img.shields.io/npm/l/mirror-orm)](LICENSE)
+[![npm](https://img.shields.io/npm/v/@mirror-community/mirror-orm)](https://www.npmjs.com/package/@mirror-community/mirror-orm)
+[![license](https://img.shields.io/npm/l/@mirror-community/mirror-orm)](LICENSE)
 [![overhead](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmirror-community%2Fmirror-orm%2Fmain%2Fbenchmark%2Flatest.json&query=%24.ns_per_row&suffix=%20ns%2Frow&label=overhead&color=brightgreen&cacheSeconds=3600)](https://github.com/mirror-community/mirror-orm/actions/workflows/benchmark.yml)
 
 ## Features
@@ -27,7 +27,7 @@ Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server, built o
 ## Installation
 
 ```bash
-npm install mirror-orm
+npm install @mirror-community/mirror-orm
 ```
 
 Install the driver for your database:
@@ -62,7 +62,7 @@ Mirror uses Stage 3 decorators. Set the following in your `tsconfig.json`:
 ## Connecting
 
 ```ts
-import { Connection } from 'mirror-orm';
+import { Connection } from '@mirror-community/mirror-orm';
 
 // PostgreSQL
 const conn = await Connection.postgres({
@@ -98,7 +98,7 @@ const conn = await Connection.sqlServer({
 ## Defining entities
 
 ```ts
-import { Entity, Column, PrimaryColumn, CreatedAt, UpdatedAt } from 'mirror-orm';
+import { Entity, Column, PrimaryColumn, CreatedAt, UpdatedAt } from '@mirror-community/mirror-orm';
 
 @Entity('users')
 class User {
@@ -165,7 +165,7 @@ const page = await repo.findPaginated({ page: 1, limit: 20 });
 ### Filter operators
 
 ```ts
-import { Like, ILike, In, Between, Not, IsNull, IsNotNull, Raw } from 'mirror-orm';
+import { Like, ILike, In, Between, Not, IsNull, IsNotNull, Raw } from '@mirror-community/mirror-orm';
 
 await repo.find({ where: { name: Like('%alice%') } });
 await repo.find({ where: { name: ILike('%alice%') } });   // case-insensitive
@@ -196,7 +196,7 @@ await repo.find({
 ## Relations
 
 ```ts
-import { ManyToOne, OneToMany, ManyToMany, OneToOne } from 'mirror-orm';
+import { ManyToOne, OneToMany, ManyToMany, OneToOne } from '@mirror-community/mirror-orm';
 
 @Entity('posts')
 class Post {
@@ -317,7 +317,7 @@ await repo.save(document);
 ## Soft delete
 
 ```ts
-import { DeletedAt } from 'mirror-orm';
+import { DeletedAt } from '@mirror-community/mirror-orm';
 
 @Entity('users')
 class User {
@@ -377,7 +377,7 @@ class Cat extends Animal {
 ## Lifecycle hooks
 
 ```ts
-import { BeforeInsert, BeforeUpdate, AfterLoad } from 'mirror-orm';
+import { BeforeInsert, BeforeUpdate, AfterLoad } from '@mirror-community/mirror-orm';
 
 @Entity('users')
 class User {
@@ -402,7 +402,7 @@ class User {
 ## JSON operators (PostgreSQL)
 
 ```ts
-import { JsonContains, JsonHasKey, JsonHasAllKeys, JsonHasAnyKey } from 'mirror-orm';
+import { JsonContains, JsonHasKey, JsonHasAllKeys, JsonHasAnyKey } from '@mirror-community/mirror-orm';
 
 await repo.find({ where: { metadata: JsonContains({ role: 'admin' }) } });
 await repo.find({ where: { metadata: JsonHasKey('active') } });

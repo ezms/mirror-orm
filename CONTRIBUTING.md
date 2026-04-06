@@ -11,7 +11,7 @@ Thank you for your interest in contributing! This document covers everything you
 ## Setup
 
 ```bash
-git clone https://github.com/ezms/mirror-orm
+git clone https://github.com/mirror-community/mirror-orm
 cd mirror-orm
 pnpm install
 ```

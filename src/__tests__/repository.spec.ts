@@ -1474,7 +1474,9 @@ describe('Repository<BinaryFixture> — type casting: json and buffer', () => {
 
     // json — string input (MySQL / SQLite / SQL Server)
     it('parses JSON string into object for type: json', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, payload: '{"key":"value"}', data: Buffer.alloc(0) }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, payload: '{"key":"value"}', data: Buffer.alloc(0) },
+        ]);
         const result = await repo.findAll();
         expect(result[0].payload).toEqual({ key: 'value' });
     });
@@ -1482,13 +1484,17 @@ describe('Repository<BinaryFixture> — type casting: json and buffer', () => {
     // json — already-parsed object (Postgres via getTypeParser)
     it('returns already-parsed object as-is for type: json', async () => {
         const obj = { key: 'value' };
-        mockQuery.mockResolvedValueOnce([{ id: 1, payload: obj, data: Buffer.alloc(0) }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, payload: obj, data: Buffer.alloc(0) },
+        ]);
         const result = await repo.findAll();
         expect(result[0].payload).toBe(obj);
     });
 
     it('returns null for null json column', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: Buffer.alloc(0) }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, payload: null, data: Buffer.alloc(0) },
+        ]);
         const result = await repo.findAll();
         expect(result[0].payload).toBeNull();
     });
@@ -1504,7 +1510,9 @@ describe('Repository<BinaryFixture> — type casting: json and buffer', () => {
 
     // buffer — non-Buffer input (edge case)
     it('converts non-Buffer value to Buffer for type: buffer', async () => {
-        mockQuery.mockResolvedValueOnce([{ id: 1, payload: null, data: [1, 2, 3] }]);
+        mockQuery.mockResolvedValueOnce([
+            { id: 1, payload: null, data: [1, 2, 3] },
+        ]);
         const result = await repo.findAll();
         expect(Buffer.isBuffer(result[0].data)).toBe(true);
         expect(Array.from(result[0].data)).toEqual([1, 2, 3]);

@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        > For general discussion about ideas, please use [GitHub Discussions](https://github.com/ezms/mirror-orm/discussions) instead.
+        > For general discussion about ideas, please use [GitHub Discussions](https://github.com/mirror-community/mirror-orm/discussions) instead.
 
   - type: textarea
     id: motivation

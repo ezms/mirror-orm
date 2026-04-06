@@ -4,7 +4,7 @@ Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server, built o
 
 [![npm](https://img.shields.io/npm/v/mirror-orm)](https://www.npmjs.com/package/mirror-orm)
 [![license](https://img.shields.io/npm/l/mirror-orm)](LICENSE)
-[![overhead](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fezms%2Fmirror-orm%2Fmain%2Fbenchmark%2Flatest.json&query=%24.ns_per_row&suffix=%20ns%2Frow&label=overhead&color=brightgreen&cacheSeconds=3600)](https://github.com/ezms/mirror-orm/actions/workflows/benchmark.yml)
+[![overhead](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmirror-community%2Fmirror-orm%2Fmain%2Fbenchmark%2Flatest.json&query=%24.ns_per_row&suffix=%20ns%2Frow&label=overhead&color=brightgreen&cacheSeconds=3600)](https://github.com/mirror-community/mirror-orm/actions/workflows/benchmark.yml)
 
 ## Features
 

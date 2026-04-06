@@ -13,7 +13,7 @@ Only the latest minor release receives security fixes.
 
 **Do not open a public issue for security vulnerabilities.**
 
-Use [GitHub Private Vulnerability Reporting](https://github.com/ezms/mirror-orm/security/advisories/new) to submit a report confidentially.
+Use [GitHub Private Vulnerability Reporting](https://github.com/mirror-community/mirror-orm/security/advisories/new) to submit a report confidentially.
 
 Please include:
 
@@ -33,7 +33,7 @@ These are best-effort targets for a solo-maintained project.
 
 ## Disclosure Policy
 
-Once a fix is released, a [GitHub Security Advisory](https://github.com/ezms/mirror-orm/security/advisories) will be published with full details. Please allow the patch to be available before any public disclosure.
+Once a fix is released, a [GitHub Security Advisory](https://github.com/mirror-community/mirror-orm/security/advisories) will be published with full details. Please allow the patch to be available before any public disclosure.
 
 ## Scope
 

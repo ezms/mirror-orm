@@ -18,7 +18,9 @@ describe('Connection.healthCheck()', () => {
     });
 
     it('returns false when primary throws', async () => {
-        const adapter = makeAdapter(() => Promise.reject(new Error('connection refused')));
+        const adapter = makeAdapter(() =>
+            Promise.reject(new Error('connection refused')),
+        );
         const connection = await Connection.create({ adapter });
         expect(await connection.healthCheck()).toBe(false);
     });
@@ -33,7 +35,9 @@ describe('Connection.healthCheck()', () => {
 
     it('returns false when replica throws', async () => {
         const adapter = makeAdapter(() => Promise.resolve([]));
-        const replicaAdapter = makeAdapter(() => Promise.reject(new Error('replica down')));
+        const replicaAdapter = makeAdapter(() =>
+            Promise.reject(new Error('replica down')),
+        );
         const connection = await Connection.create({ adapter, replicaAdapter });
         expect(await connection.healthCheck()).toBe(false);
     });

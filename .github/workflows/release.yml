@@ -75,12 +75,17 @@ jobs:
           node -e "
             const fs = require('fs');
             const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
-            const start = changelog.indexOf('## ' + process.env.VERSION);
-            if (start === -1) process.exit(1);
-            const after = changelog.indexOf('\n## ', start + 1);
+            const marker = '## ' + process.env.VERSION;
+            const start = changelog.indexOf(marker);
+            if (start === -1) {
+              console.error('Could not find ' + marker + ' in CHANGELOG.md');
+              process.exit(1);
+            }
+            const after = changelog.indexOf('\n## ', start + marker.length);
             const block = after === -1 ? changelog.slice(start) : changelog.slice(start, after);
             fs.writeFileSync('/tmp/release-notes.md', block.trim());
           " VERSION="$VERSION"
           gh release create "v${VERSION}" \
             --title "v${VERSION}" \
-            --notes-file /tmp/release-notes.md
+            --notes-file /tmp/release-notes.md \
+            --verify-tag

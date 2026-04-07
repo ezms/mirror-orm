@@ -201,6 +201,25 @@ export class SqlAssembler<T> {
         };
     }
 
+    public buildExists(where?: IFindOptions<T>['where']): {
+        sql: string;
+        params: Array<unknown>;
+    } {
+        const params: Array<unknown> = [];
+        let whereSql = this.buildWhere(where, params);
+        whereSql = this.appendDiscriminatorFilter(whereSql);
+        const sdCol = this.state.cachedDeletedAtColumn;
+        if (sdCol) {
+            const sdClause = `${this.state.quoteIdentifier(sdCol.databaseName)} IS NULL`;
+            whereSql += whereSql ? ` AND ${sdClause}` : ` WHERE ${sdClause}`;
+        }
+        const inner = `SELECT 1 FROM ${this.state.quotedTableName}${whereSql}`;
+        const sql = this.state.supportsOutputInserted
+            ? `SELECT CASE WHEN EXISTS (${inner}) THEN 1 ELSE 0 END AS "exists"`
+            : `SELECT EXISTS (${inner}) AS "exists"`;
+        return { sql, params };
+    }
+
     public buildInsert(
         record: Record<string, unknown>,
         isIdentity: boolean,

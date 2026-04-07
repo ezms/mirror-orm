@@ -467,7 +467,15 @@ export class Repository<T> {
     }
 
     public async exists(where?: IFindOptions<T>['where']): Promise<boolean> {
-        return (await this.count(where)) > 0;
+        const { sql, params } = this.assembler.buildExists(where);
+        try {
+            const rows = await this.readRunner.query<{
+                exists: boolean | number;
+            }>(sql, params);
+            return Boolean(rows[0].exists);
+        } catch (error) {
+            throw new QueryError(sql, error, params);
+        }
     }
 
     public async count(where?: IFindOptions<T>['where']): Promise<number> {

@@ -240,19 +240,44 @@ describe('Repository<UserFixture> (identity PK)', () => {
     // ─── exists ──────────────────────────────────────────────────────────────
 
     describe('exists', () => {
-        it('returns true when count is greater than zero', async () => {
-            mockQuery.mockResolvedValueOnce([{ count: '1' }]);
+        it('returns true when row is found (boolean true)', async () => {
+            mockQuery.mockResolvedValueOnce([{ exists: true }]);
             expect(await repo.exists({ name: 'Emanuel' })).toBe(true);
         });
 
-        it('returns false when count is zero', async () => {
-            mockQuery.mockResolvedValueOnce([{ count: '0' }]);
+        it('returns true when row is found (numeric 1 — MySQL/SQLite)', async () => {
+            mockQuery.mockResolvedValueOnce([{ exists: 1 }]);
+            expect(await repo.exists({ name: 'Emanuel' })).toBe(true);
+        });
+
+        it('returns false when no row is found (boolean false)', async () => {
+            mockQuery.mockResolvedValueOnce([{ exists: false }]);
+            expect(await repo.exists({ name: 'Ghost' })).toBe(false);
+        });
+
+        it('returns false when no row is found (numeric 0 — MySQL/SQLite)', async () => {
+            mockQuery.mockResolvedValueOnce([{ exists: 0 }]);
             expect(await repo.exists({ name: 'Ghost' })).toBe(false);
         });
 
         it('works without where (checks if table has any rows)', async () => {
-            mockQuery.mockResolvedValueOnce([{ count: '10' }]);
+            mockQuery.mockResolvedValueOnce([{ exists: true }]);
             expect(await repo.exists()).toBe(true);
+        });
+
+        it('emits EXISTS subquery instead of COUNT(*)', async () => {
+            mockQuery.mockResolvedValueOnce([{ exists: true }]);
+            await repo.exists({ name: 'Emanuel' });
+            const sql: string = mockQuery.mock.calls[0][0];
+            expect(sql).toContain('EXISTS');
+            expect(sql).not.toContain('COUNT(*)');
+        });
+
+        it('throws QueryError on database error', async () => {
+            mockQuery.mockRejectedValueOnce(new Error('db error'));
+            await expect(repo.exists({ name: 'X' })).rejects.toBeInstanceOf(
+                QueryError,
+            );
         });
     });
 

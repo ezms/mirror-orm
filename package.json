@@ -47,7 +47,7 @@
     "author": "Emanuel Martins <emanuelm.dev@gmail.com>",
     "repository": {
         "type": "git",
-        "url": "https://github.com/mirror-community/mirror-orm"
+        "url": "git+https://github.com/mirror-community/mirror-orm.git"
     },
     "homepage": "https://doc-mirror-orm.vercel.app/",
     "license": "Apache-2.0",

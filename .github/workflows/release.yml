@@ -81,6 +81,6 @@ jobs:
             const block = after === -1 ? changelog.slice(start) : changelog.slice(start, after);
             fs.writeFileSync('/tmp/release-notes.md', block.trim());
           " VERSION="$VERSION"
-          gh release create "@mirror-community/mirror-orm@${VERSION}" \
+          gh release create "v${VERSION}" \
             --title "v${VERSION}" \
             --notes-file /tmp/release-notes.md

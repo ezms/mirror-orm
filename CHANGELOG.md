@@ -1,5 +1,11 @@
 # mirror-orm
 
+## 1.0.6
+
+### Patch Changes
+
+- e7b850a: Restore unscoped package name `mirror-orm`. The package was temporarily published as `@mirror-community/mirror-orm` during a migration attempt — it is now back under the original name. Users on `@mirror-community/mirror-orm` should switch back to `mirror-orm`.
+
 ## 1.0.5
 
 ### Patch Changes

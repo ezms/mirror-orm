@@ -1,12 +1,12 @@
 {
     "name": "mirror-orm",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "Lightweight TypeScript ORM for PostgreSQL, SQLite, MySQL and SQL Server using Stage 3 decorators",
     "main": "dist/index.js",
     "module": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
-        "build": "tsc",
+        "build": "tsup",
         "lint": "eslint src/**/*.ts",
         "lint:fix": "eslint src/**/*.ts --fix",
         "format": "prettier --write \"src/**/*.ts\"",
@@ -89,6 +89,7 @@
         "eslint-plugin-prettier": "^5.5.5",
         "prettier": "^3.8.1",
         "ts-node": "^10.9.2",
+        "tsup": "^8.5.1",
         "tsx": "^4.19.0",
         "typescript": "^5.9.3",
         "vitest": "^4.1.3"

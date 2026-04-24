@@ -1,5 +1,11 @@
 # mirror-orm
 
+## 1.0.7
+
+### Patch Changes
+
+- 714a490: fix: replace tsc with tsup to produce valid ESM output with explicit .js extensions
+
 ## 1.0.6
 
 ### Patch Changes

@@ -1,3 +1,9 @@
+import {
+    NoPrimaryColumnError,
+    RelationJoinError,
+    RelationNotFoundError,
+    UnsupportedOperationError,
+} from '../errors';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { isOperator } from '../operators/query-operator';
 import { RepositoryState } from '../repository/repository-state';
@@ -28,32 +34,52 @@ export class QueryBuilder<T> {
         private readonly runner: IQueryRunner,
     ) {}
 
-    select(keys: Array<string>): this {
+    public select(keys: Array<string>): this {
         this._selectKeys = keys;
         return this;
     }
 
-    leftJoin(relationKey: string, alias: string): this {
+    public leftJoin(relationKey: string, alias: string): this {
+        return this._addJoin('LEFT', relationKey, alias);
+    }
+
+    public innerJoin(relationKey: string, alias: string): this {
+        return this._addJoin('INNER', relationKey, alias);
+    }
+
+    private _addJoin(
+        type: 'LEFT' | 'INNER',
+        relationKey: string,
+        alias: string,
+    ): this {
         const relation = this.state.metadata.relations.find(
             (r) => r.propertyKey === relationKey,
         );
         if (!relation)
-            throw new Error(
-                `Relation "${relationKey}" not found on ${this.state.metadata.className}`,
+            throw new RelationNotFoundError(
+                relationKey,
+                this.state.metadata.className,
+            );
+        if (
+            relation.type === 'one-to-many' ||
+            relation.type === 'many-to-many'
+        )
+            throw new RelationJoinError(
+                relationKey,
+                relation.type,
+                this.state.metadata.className,
             );
         const relatedState = this.state.getRelatedState(relation);
         const relPk = relatedState.cachedPrimaryColumn;
         if (!relPk)
-            throw new Error(
-                `Related entity "${relatedState.metadata.className}" has no primary column`,
-            );
-        const quotedAlias = `"${alias}"`;
+            throw new NoPrimaryColumnError(relatedState.metadata.className);
+        const quotedAlias = this.state.quoteIdentifier(alias);
         const relPkQuoted = relatedState.columnMap.get(
             relPk.propertyKey,
         )!.quotedDatabaseName;
-        const condition = `${this.state.quotedTableName}."${relation.foreignKey}" = ${quotedAlias}.${relPkQuoted}`;
+        const condition = `${this.state.quotedTableName}.${this.state.quoteIdentifier(relation.foreignKey!)} = ${quotedAlias}.${relPkQuoted}`;
         this._joins.push({
-            type: 'LEFT',
+            type,
             quotedTable: relatedState.quotedTableName,
             alias: quotedAlias,
             condition,
@@ -61,42 +87,42 @@ export class QueryBuilder<T> {
         return this;
     }
 
-    where(condition: QBWhere): this {
+    public where(condition: QBWhere): this {
         this._where = condition;
         return this;
     }
 
-    andWhere(sql: string, params: unknown[] = []): this {
+    public andWhere(sql: string, params: unknown[] = []): this {
         this._rawWheres.push({ sql, params });
         return this;
     }
 
-    groupBy(columns: string | string[]): this {
+    public groupBy(columns: string | string[]): this {
         this._groupBy = Array.isArray(columns) ? columns : [columns];
         return this;
     }
 
-    having(condition: string): this {
+    public having(condition: string): this {
         this._having = condition;
         return this;
     }
 
-    orderBy(options: Record<string, 'ASC' | 'DESC'>): this {
+    public orderBy(options: Record<string, 'ASC' | 'DESC'>): this {
         this._orderBy = options;
         return this;
     }
 
-    limit(n: number): this {
+    public limit(n: number): this {
         this._limit = n;
         return this;
     }
 
-    offset(n: number): this {
+    public offset(n: number): this {
         this._offset = n;
         return this;
     }
 
-    async getMany(): Promise<T[]> {
+    public async getMany(): Promise<T[]> {
         const { sql, params } = this.build();
         const rows = await this.runner.query<Record<string, unknown>>(
             sql,
@@ -105,13 +131,13 @@ export class QueryBuilder<T> {
         return rows.map((row) => this.state.hydrator(row));
     }
 
-    async getRaw(): Promise<Record<string, unknown>[]> {
+    public async getRaw(): Promise<Record<string, unknown>[]> {
         const { sql, params } = this.build();
         return this.runner.query<Record<string, unknown>>(sql, params);
     }
 
-    async getCount(): Promise<number> {
-        const params: unknown[] = [];
+    public async getCount(): Promise<number> {
+        const params: Array<unknown> = [];
         const joinsSql = this.buildJoins();
         let whereSql = this.buildWhere(params);
         const sdCol = this.state.cachedDeletedAtColumn;
@@ -127,16 +153,22 @@ export class QueryBuilder<T> {
         return parseInt(rows[0].count, 10);
     }
 
-    async explain(): Promise<string> {
+    public async explain(): Promise<string> {
         const { sql, params } = this.build();
-        const rows = await this.runner.query<{ 'QUERY PLAN': string }>(
-            `EXPLAIN ANALYZE ${sql}`,
+        const explainSql = this.state.buildExplainQuery(sql);
+        if (!explainSql)
+            throw new UnsupportedOperationError(
+                'explain',
+                this.state.dialectName,
+            );
+        const rows = await this.runner.query<Record<string, unknown>>(
+            explainSql,
             params,
         );
-        return rows.map((r) => r['QUERY PLAN']).join('\n');
+        return this.state.formatExplainResult(rows);
     }
 
-    build(): { sql: string; params: unknown[] } {
+    public build(): { sql: string; params: unknown[] } {
         const params: unknown[] = [];
 
         const selectClause = this._selectKeys

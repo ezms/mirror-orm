@@ -129,6 +129,18 @@ export class RepositoryState<T> {
         return this.dialect.buildLimitOffset(hasOrderBy, limit, offset);
     }
 
+    public buildExplainQuery(sql: string): string | null {
+        return this.dialect.buildExplainQuery(sql);
+    }
+
+    public formatExplainResult(rows: Array<Record<string, unknown>>): string {
+        return this.dialect.formatExplainResult(rows);
+    }
+
+    public get dialectName(): string {
+        return this.dialect.constructor.name.replace('Dialect', '');
+    }
+
     private buildColumnMap(): Map<
         string,
         IColumnMetadata & { quotedDatabaseName: string }

@@ -37,4 +37,12 @@ export class MssqlDialect implements IDialect {
         }
         return `${orderPrefix} OFFSET ${off} ROWS`;
     }
+
+    public buildExplainQuery(_sql: string): null {
+        return null;
+    }
+
+    public formatExplainResult(_rows: Array<Record<string, unknown>>): string {
+        return '';
+    }
 }

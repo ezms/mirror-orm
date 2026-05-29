@@ -5,5 +5,8 @@ export {
     GenerationStrategyError,
     EntityNotFoundError,
     OptimisticLockError,
+    RelationJoinError,
+    RelationNotFoundError,
+    UnsupportedOperationError,
 } from './operation.error';
 export { QueryError } from './query.error';

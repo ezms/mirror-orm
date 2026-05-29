@@ -32,4 +32,12 @@ export class SQLiteDialect implements IDialect {
         if (offset !== undefined) sql += ` OFFSET ${offset}`;
         return sql;
     }
+
+    public buildExplainQuery(sql: string): string {
+        return `EXPLAIN QUERY PLAN ${sql}`;
+    }
+
+    public formatExplainResult(rows: Array<Record<string, unknown>>): string {
+        return rows.map((r) => String(r['detail'] ?? JSON.stringify(r))).join('\n');
+    }
 }

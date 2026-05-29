@@ -29,3 +29,30 @@ export class OptimisticLockError extends MirrorError {
         );
     }
 }
+
+export class RelationJoinError extends MirrorError {
+    constructor(propertyKey: string, relationType: string, className: string) {
+        super(
+            `Cannot join "${propertyKey}" (${relationType}) on "${className}" — joining a collection relation produces duplicate rows. Use find({ relations: ['${propertyKey}'] }) to load related data, or raw SQL for custom JOIN behavior.`,
+            'RELATION_JOIN_ERROR',
+        );
+    }
+}
+
+export class RelationNotFoundError extends MirrorError {
+    constructor(propertyKey: string, className: string) {
+        super(
+            `Relation "${propertyKey}" not found on "${className}". Did you add @ManyToOne, @OneToOne, @OneToMany or @ManyToMany?`,
+            'RELATION_NOT_FOUND',
+        );
+    }
+}
+
+export class UnsupportedOperationError extends MirrorError {
+    constructor(operation: string, dialect: string) {
+        super(
+            `"${operation}" is not supported by the ${dialect} dialect.`,
+            'UNSUPPORTED_OPERATION',
+        );
+    }
+}

@@ -31,4 +31,12 @@ export class PostgresDialect implements IDialect {
         if (offset !== undefined) sql += ` OFFSET ${offset}`;
         return sql;
     }
+
+    public buildExplainQuery(sql: string): string {
+        return `EXPLAIN ANALYZE ${sql}`;
+    }
+
+    public formatExplainResult(rows: Array<Record<string, unknown>>): string {
+        return rows.map((r) => String(r['QUERY PLAN'] ?? '')).join('\n');
+    }
 }

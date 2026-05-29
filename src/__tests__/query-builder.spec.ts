@@ -5,7 +5,11 @@ import { IEntityMetadata } from '../interfaces/entity-metadata';
 import { IQueryRunner } from '../interfaces/query-runner';
 import { MoreThan } from '../operators';
 import { registry } from '../metadata/registry';
-import { AuthorFixture, BookFixture } from './fixtures/user.entity';
+import { ArticleFixture, AuthorFixture, BookFixture } from './fixtures/user.entity';
+import { MySQLDialect } from '../dialects/mysql.dialect';
+import { SQLiteDialect } from '../dialects/sqlite.dialect';
+import { MssqlDialect } from '../dialects/mssql.dialect';
+import { RelationJoinError, RelationNotFoundError, UnsupportedOperationError } from '../errors';
 
 void AuthorFixture;
 void BookFixture;
@@ -248,9 +252,9 @@ describe('QueryBuilder', () => {
     });
 });
 
-// ─── QueryBuilder — leftJoin ──────────────────────────────────────────────────
+// ─── QueryBuilder — leftJoin / innerJoin ─────────────────────────────────────
 
-describe('QueryBuilder — leftJoin', () => {
+describe('QueryBuilder — leftJoin / innerJoin', () => {
     const makeBookQB = (runner: IQueryRunner) =>
         new QueryBuilder(
             new RepositoryState(
@@ -268,10 +272,109 @@ describe('QueryBuilder — leftJoin', () => {
         expect(sql).toContain('"author_id"');
     });
 
-    it('leftJoin throws for unknown relation key', () => {
+    it('innerJoin builds correct INNER JOIN clause', () => {
+        const { sql } = makeBookQB(makeRunner())
+            .innerJoin('author', 'a')
+            .build();
+        expect(sql).toContain('INNER JOIN "authors" "a" ON');
+        expect(sql).toContain('"author_id"');
+    });
+
+    it('leftJoin throws RelationNotFoundError for unknown relation', () => {
         expect(() =>
             makeBookQB(makeRunner()).leftJoin('nonExistent', 'x'),
-        ).toThrow(/"nonExistent"/);
+        ).toThrowError(RelationNotFoundError);
+    });
+
+    it('innerJoin throws RelationNotFoundError for unknown relation', () => {
+        expect(() =>
+            makeBookQB(makeRunner()).innerJoin('nonExistent', 'x'),
+        ).toThrowError(RelationNotFoundError);
+    });
+
+    it('leftJoin error message names the missing relation and entity', () => {
+        expect(() =>
+            makeBookQB(makeRunner()).leftJoin('nonExistent', 'x'),
+        ).toThrow(/"nonExistent".*"BookFixture"/);
+    });
+
+    it('leftJoin throws RelationJoinError for OneToMany relation', () => {
+        const qb = new QueryBuilder(
+            new RepositoryState(AuthorFixture, registry.getEntity('AuthorFixture')!),
+            makeRunner(),
+        );
+        expect(() => qb.leftJoin('books', 'b')).toThrowError(RelationJoinError);
+    });
+
+    it('innerJoin throws RelationJoinError for ManyToMany relation', () => {
+        void ArticleFixture;
+        const qb = new QueryBuilder(
+            new RepositoryState(ArticleFixture, registry.getEntity('ArticleFixture')!),
+            makeRunner(),
+        );
+        expect(() => qb.innerJoin('tags', 't')).toThrowError(RelationJoinError);
+    });
+
+    it('RelationJoinError message names the relation, type, and entity', () => {
+        const qb = new QueryBuilder(
+            new RepositoryState(AuthorFixture, registry.getEntity('AuthorFixture')!),
+            makeRunner(),
+        );
+        expect(() => qb.leftJoin('books', 'b')).toThrow(
+            /"books".*one-to-many.*"AuthorFixture"/,
+        );
+    });
+});
+
+// ─── QueryBuilder — explain ───────────────────────────────────────────────────
+
+describe('QueryBuilder — explain', () => {
+    const makeQBWithDialect = (runner: IQueryRunner, dialect: object) =>
+        new QueryBuilder(
+            new RepositoryState(Post, metadata, dialect as never),
+            runner,
+        );
+
+    it('explain() sends EXPLAIN ANALYZE for Postgres and formats QUERY PLAN', async () => {
+        const runner = makeRunner([{ 'QUERY PLAN': 'Seq Scan on posts' }]);
+        const plan = await makeQB(runner).explain();
+        const sql = (runner.query as ReturnType<typeof vi.fn>).mock
+            .calls[0][0] as string;
+        expect(sql).toMatch(/^EXPLAIN ANALYZE /);
+        expect(plan).toBe('Seq Scan on posts');
+    });
+
+    it('explain() sends EXPLAIN for MySQL and JSON-stringifies rows', async () => {
+        const row = { id: 1, select_type: 'SIMPLE', table: 'posts' };
+        const runner = makeRunner([row]);
+        const plan = await makeQBWithDialect(runner, new MySQLDialect()).explain();
+        const sql = (runner.query as ReturnType<typeof vi.fn>).mock
+            .calls[0][0] as string;
+        expect(sql).toMatch(/^EXPLAIN /);
+        expect(plan).toBe(JSON.stringify(row));
+    });
+
+    it('explain() sends EXPLAIN QUERY PLAN for SQLite and returns detail', async () => {
+        const runner = makeRunner([{ id: 1, parent: 0, notused: 0, detail: 'SCAN posts' }]);
+        const plan = await makeQBWithDialect(runner, new SQLiteDialect()).explain();
+        const sql = (runner.query as ReturnType<typeof vi.fn>).mock
+            .calls[0][0] as string;
+        expect(sql).toMatch(/^EXPLAIN QUERY PLAN /);
+        expect(plan).toBe('SCAN posts');
+    });
+
+    it('explain() throws UnsupportedOperationError for SQL Server', async () => {
+        const runner = makeRunner([]);
+        await expect(
+            makeQBWithDialect(runner, new MssqlDialect()).explain(),
+        ).rejects.toThrowError(UnsupportedOperationError);
+    });
+
+    it('explain() UnsupportedOperationError names the dialect', async () => {
+        const runner = makeRunner([]);
+        await expect(
+            makeQBWithDialect(runner, new MssqlDialect()).explain(),
+        ).rejects.toThrow(/Mssql/);
     });
 });
 

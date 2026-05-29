@@ -74,4 +74,21 @@ export interface IDialect {
         limit?: number,
         offset?: number,
     ): string;
+
+    /**
+     * Wraps a SELECT statement in the appropriate EXPLAIN syntax for this dialect.
+     * Returns null if the dialect does not support query plan inspection.
+     *
+     * PostgreSQL: EXPLAIN ANALYZE <sql>
+     * MySQL:      EXPLAIN <sql>
+     * SQLite:     EXPLAIN QUERY PLAN <sql>
+     * SQL Server: null (no equivalent single-statement syntax)
+     */
+    buildExplainQuery(sql: string): string | null;
+
+    /**
+     * Formats raw rows returned by the EXPLAIN query into a human-readable string.
+     * Only called when buildExplainQuery returns non-null.
+     */
+    formatExplainResult(rows: Array<Record<string, unknown>>): string;
 }

@@ -32,4 +32,12 @@ export class MySQLDialect implements IDialect {
         if (offset !== undefined) sql += ` OFFSET ${offset}`;
         return sql;
     }
+
+    public buildExplainQuery(sql: string): string {
+        return `EXPLAIN ${sql}`;
+    }
+
+    public formatExplainResult(rows: Array<Record<string, unknown>>): string {
+        return rows.map((r) => JSON.stringify(r)).join('\n');
+    }
 }
